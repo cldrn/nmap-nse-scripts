@@ -20,7 +20,6 @@ Remember each fingerprint must have:
 * <code>login_check</code> - Login function of the target
 
 Default fingerprint file: /nselib/data/http-default-accounts-fingerprints.lua 
-
 This script was based in http-enum. 
 ]]
 
@@ -265,6 +264,7 @@ action = function(host, port)
         if( http.page_exists(results[j], result_404, known_404, path, true) ) then
           --Check default credentials
           if( fingerprint.login_check(host, port, path, fingerprint.login_username, fingerprint.login_password) ) then
+
             --Valid credentials found
             stdnse.print_debug(1, "%s valid default credentials found.", fingerprint.name)
             output_lns[#output_lns + 1] = string.format("[%s] credentials found -> %s:%s Path:%s", 
