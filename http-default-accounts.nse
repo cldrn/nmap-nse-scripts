@@ -24,6 +24,10 @@ Remember each fingerprint must have:
 -- @usage
 -- nmap -p80 --script http-default-accounts host/ip
 -- @output
+-- PORT   STATE SERVICE REASON
+-- 80/tcp open  http    syn-ack
+-- |_http-default-accounts: [Cacti] credentials found -> admin:admin Path:/cacti/
+-- Final times for host: srtt: 94615 rttvar: 71012  to: 378663
 --
 -- @args http-default-accounts.basepath Base path to append to requests. Default: "/"
 -- @args http-default-accounts.fingerprintfile Fingerprint filename. Default:http-default-accounts-fingerprints.lua
@@ -48,6 +52,9 @@ local SCRIPT_NAME = "http-default-accounts"
 -- load_fingerprints(filename, category)
 -- Loads data from file and returns table of fingerprints if sanity checks are passed
 -- Based on http-enum's load_fingerprints() 
+-- @param filename Fingerprint filename
+-- @param cat Category of fingerprints to use
+-- @return Table of fingerprints
 ---
 local function load_fingerprints(filename, cat)
   local file, filename_full, fingerprints
@@ -154,6 +161,8 @@ end
 ---
 -- format_basepath(basepath)
 -- Removes trailing and leading dashes in a string
+-- @param basepath Basepath string
+-- @return Basepath string with no trailing or leading dashes
 ---
 local function format_basepath(basepath)
   -- Remove trailing slash, if it exists
@@ -175,6 +184,8 @@ end
 -- register_http_credentials(username, password)
 -- Stores HTTP credentials in the registry. If the registry entry hasn't been
 -- initiated, it will create it and store the credentials.
+-- @param login_username Username
+-- @param login_password Password
 ---
 local function register_http_credentials(login_username, login_password) 
   if ( not( nmap.registry['credentials'] ) ) then
@@ -188,8 +199,8 @@ end
 
 ---
 -- MAIN
--- Here we iterate through the paths to try to find 
--- 
+-- Here we iterate through the paths to try to find a target. When a target is found
+-- the login routine is initialized to check for default credentials authentication
 ---
 action = function(host, port)
   local fingerprintload_status, fingerprints, requests, results
@@ -207,10 +218,9 @@ action = function(host, port)
 
   --Format basepath: Removes or adds slashs
   basepath = format_basepath(basepath)
- 
-  requests = {}
 
   -- Add requests to http pipeline
+  requests = {}
   stdnse.print_debug(1, "%s: Searching for entries under path '%s' (change with '%s.basepath' argument)", SCRIPT_NAME, basepath, SCRIPT_NAME)
   for i = 1, #fingerprints, 1 do
     for j = 1, #fingerprints[i].paths, 1 do
@@ -230,7 +240,7 @@ action = function(host, port)
     return stdnse.format_output(false, result_404)
   end
 
-  -- Iterate through responses to find a match
+  -- Iterate through responses to find a candidate for login routine
   local j = 1
   for i, fingerprint in ipairs(fingerprints) do
     stdnse.print_debug(1, "%s: Processing %s", SCRIPT_NAME, fingerprint.name)
@@ -240,9 +250,9 @@ action = function(host, port)
         local path = basepath .. probe['path']
 
         if( http.page_exists(results[j], result_404, known_404, path, true) ) then
-
-          --we found some valid credentials
+          --Check default credentials
           if( fingerprint.login_check(host, port, path, fingerprint.login_username, fingerprint.login_password) ) then
+            --Valid credentials
             stdnse.print_debug(1, "%s valid default credentials found.", fingerprint.name)
             output_lns[#output_lns + 1] = string.format("[%s] credentials found -> %s:%s Path:%s", 
                                           fingerprint.name, fingerprint.login_username, fingerprint.login_password, path)
