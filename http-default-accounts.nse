@@ -1,14 +1,37 @@
 description = [[
-http-default-accounts is a script to test default credentials in a variety of devices and web applications.
+http-default-accounts tests for access with default credentials in a variety of web applications and devices.
+
+This script depends on a fingerprint file containing the target's information: name, category, location paths, default credentials and login routine.
+http-default-accounts searches the paths and if a page is found, it launches the corresponding login routine to check if the default login credentials are valid.
+
+You may select a category if you wish to reduce the number of requests. We have categories like:
+* <code>web</code> - Web applications
+* <code>router</code> - Routers
+* <code>voip</code> - VOIP devices
+
+Please help improve this script by adding new entries to nselib/data/http-default-accounts.lua
+
+Remember each fingerprint must have:
+* <code>name</code> - Descriptive name
+* <code>category</code> - Category
+* <code>login_username</code> - Default username
+* <code>login_password</code> - Default password
+* <code>paths</code> - Paths table containing the possible location of the target
+* <code>login_check</code> - Login function of the target
 ]]
 
 ---
 -- @usage
--- 
+-- nmap -p80 --script http-default-accounts host/ip
 -- @output
 --
--- @args
---
+-- @args http-default-accounts.basepath Base path to append to requests. Default: "/"
+-- @args http-default-accounts.fingerprintfile Fingerprint filename. Default:http-default-accounts-fingerprints.lua
+-- @args http-default-accounts.category Selects a category of fingerprints to use.
+-- 
+-- Other useful arguments relevant to this script:
+-- http.pipeline Sets max number of petitions in the same request.
+-- http.useragent User agent for HTTP requests
 ---
 
 author = "Paulino Calderon"
@@ -23,11 +46,10 @@ local SCRIPT_NAME = "http-default-accounts"
 
 ---
 -- load_fingerprints(filename, category)
--- Loads data from file and returns table of fingerprints
+-- Loads data from file and returns table of fingerprints if sanity checks are passed
 -- Based on http-enum's load_fingerprints() 
 ---
 local function load_fingerprints(filename, cat)
-  local i
   local file, filename_full, fingerprints
 
   -- Check if fingerprints are cached
@@ -41,6 +63,7 @@ local function load_fingerprints(filename, cat)
   if(not(filename_full)) then
     filename_full = filename
   end
+
   -- Load the file
   stdnse.print_debug(1, "%s: Loading fingerprints: %s", SCRIPT_NAME, filename_full)
   file = loadfile(filename_full)
@@ -48,7 +71,6 @@ local function load_fingerprints(filename, cat)
     stdnse.print_debug(1, "%s: Couldn't load the file: %s", SCRIPT_NAME, filename_full)
     return false, "Couldn't load fingerprint file: " .. filename_full
   end
-
   setfenv(file, setmetatable({fingerprints = {}; }, {__index = _G}))
   file()
   fingerprints = getfenv(file)["fingerprints"]
@@ -72,11 +94,11 @@ local function load_fingerprints(filename, cat)
       fingerprint.paths = {fingerprint.paths}
     end
 
-    -- Make sure the elements in the probes array are strings or arrays
+    -- Make sure the elements in the paths array are strings or arrays
     for i, path in pairs(fingerprint.paths) do
       -- Make sure we have a valid index
       if(type(i) ~= 'number') then
-        return false, "The 'probes' table is an array, not a table; all indexes should be numeric"
+        return false, "The 'paths' table is an array, not a table; all indexes should be numeric"
       end
 
       -- Convert the path to a table if it's a string
@@ -89,6 +111,23 @@ local function load_fingerprints(filename, cat)
       if(not(path['path'])) then
         return false, "The 'paths' table requires each element to have a 'path'."
       end
+    end
+     -- Make sure they include the login function
+    if(type(fingerprint.login_check) ~= "function") then
+      return false, "Missing or invalid login_check function in entry #"..i
+    end
+      -- Are missing any fields?
+    if(fingerprint.category and type(fingerprint.category) ~= "string") then
+      return false, "Missing or invalid category in entry #"..i
+    end
+    if(fingerprint.name and type(fingerprint.name) ~= "string") then
+      return false, "Missing or invalid name in entry #"..i
+    end
+    if(fingerprint.login_username and type(fingerprint.login_username) ~= "string") then
+      return false, "Missing or invalid login_username in entry #"..i
+    end
+    if(fingerprint.login_password and type(fingerprint.login_password) ~= "string") then
+      return false, "Missing or invalid login_password in entry #"..i
     end
 
   end
@@ -112,6 +151,10 @@ local function load_fingerprints(filename, cat)
   return true, fingerprints
 end
 
+---
+-- format_basepath(basepath)
+-- Removes trailing and leading dashes in a string
+---
 local function format_basepath(basepath)
   -- Remove trailing slash, if it exists
   if(#basepath > 1 and string.sub(basepath, #basepath, #basepath) == '/') then
@@ -128,6 +171,11 @@ local function format_basepath(basepath)
   return basepath  
 end
 
+---
+-- register_http_credentials(username, password)
+-- Stores HTTP credentials in the registry. If the registry entry hasn't been
+-- initiated, it will create it and store the credentials.
+---
 local function register_http_credentials(login_username, login_password) 
   if ( not( nmap.registry['credentials'] ) ) then
     nmap.registry['credentials'] = {}
@@ -137,9 +185,11 @@ local function register_http_credentials(login_username, login_password)
   end
   table.insert( nmap.registry.credentials.http, { username = login_username, password = login_password } )
 end
+
 ---
 -- MAIN
---
+-- Here we iterate through the paths to try to find 
+-- 
 ---
 action = function(host, port)
   local fingerprintload_status, fingerprints, requests, results
@@ -183,23 +233,29 @@ action = function(host, port)
   -- Iterate through responses to find a match
   local j = 1
   for i, fingerprint in ipairs(fingerprints) do
-    stdnse.print_debug(2, "Processing %s", fingerprint.name)
+    stdnse.print_debug(1, "%s: Processing %s", SCRIPT_NAME, fingerprint.name)
     for _, probe in ipairs(fingerprint.paths) do
+
       if (results[j]) then
         local path = basepath .. probe['path']
+
         if( http.page_exists(results[j], result_404, known_404, path, true) ) then
+
           --we found some valid credentials
           if( fingerprint.login_check(host, port, path, fingerprint.login_username, fingerprint.login_password) ) then
             stdnse.print_debug(1, "%s valid default credentials found.", fingerprint.name)
-            output_lns[#output_lns + 1] = string.format("[%s] credentials found -> %s:%s", 
-                                          fingerprint.name, fingerprint.login_username, fingerprint.login_password)
+            output_lns[#output_lns + 1] = string.format("[%s] credentials found -> %s:%s Path:%s", 
+                                          fingerprint.name, fingerprint.login_username, fingerprint.login_password, path)
             -- Add to http credentials table
             register_http_credentials(fingerprint.login_username, fingerprint.login_password)
          end
+
         end
       end
       j = j + 1
     end
   end
-  return stdnse.strjoin("\n", output_lns)
+  if #output_lns > 0 then
+    return stdnse.strjoin("\n", output_lns)
+  end
 end
