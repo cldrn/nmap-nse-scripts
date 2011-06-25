@@ -127,6 +127,16 @@ local function format_basepath(basepath)
   end
   return basepath  
 end
+
+local function register_http_credentials(login_username, login_password) 
+  if ( not( nmap.registry['credentials'] ) ) then
+    nmap.registry['credentials'] = {}
+  end
+  if ( not( nmap.registry.credentials['http'] ) ) then
+    nmap.registry.credentials['http'] = {}
+  end
+  table.insert( nmap.registry.credentials.http, { username = login_username, password = login_password } )
+end
 ---
 -- MAIN
 --
@@ -136,6 +146,7 @@ action = function(host, port)
   local fingerprint_filename = nmap.registry.args["http-default-accounts.fingerprintfile"] or "http-defaul-accounts-fingerprints.lua"
   local category = nmap.registry.args["http-default-accounts.category"] or false
   local basepath = nmap.registry.args["http-default-accounts.basepath"] or "/"
+  local output_lns = {}
 
   --Load fingerprint data or abort 
   status, fingerprints = load_fingerprints(fingerprint_filename, category)
@@ -180,19 +191,15 @@ action = function(host, port)
           --we found some valid credentials
           if( fingerprint.login_check(host, port, path, fingerprint.login_username, fingerprint.login_password) ) then
             stdnse.print_debug(1, "%s valid default credentials found.", fingerprint.name)
+            output_lns[#output_lns + 1] = string.format("[%s] credentials found -> %s:%s", 
+                                          fingerprint.name, fingerprint.login_username, fingerprint.login_password)
             -- Add to http credentials table
-            if ( not( nmap.registry['credentials'] ) ) then
-              nmap.registry['credentials'] = {}
-            end
-            if ( not( nmap.registry.credentials['http'] ) ) then
-              nmap.registry.credentials['http'] = {}
-            end
-            table.insert( nmap.registry.credentials.http, { username = fingerprint.login_username, password = fingerprint.login_password } )
-          end
+            register_http_credentials(fingerprint.login_username, fingerprint.login_password)
+         end
         end
       end
       j = j + 1
     end
   end
-  
+  return stdnse.strjoin("\n", output_lns)
 end
