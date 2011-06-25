@@ -18,6 +18,10 @@ Remember each fingerprint must have:
 * <code>login_password</code> - Default password
 * <code>paths</code> - Paths table containing the possible location of the target
 * <code>login_check</code> - Login function of the target
+
+Default fingerprint file: /nselib/data/http-default-accounts-fingerprints.lua 
+
+This script was based in http-enum. 
 ]]
 
 ---
@@ -40,13 +44,72 @@ Remember each fingerprint must have:
 
 author = "Paulino Calderon"
 license = "Same as Nmap--See http://nmap.org/book/man-legal.html"
-categories = {"discovery", "auth"}
+categories = {"discovery", "auth", "safe"}
 
 require "http"
 require "shortport"
 portrule = shortport.http
 
 local SCRIPT_NAME = "http-default-accounts"
+
+---
+--validate_fingerprints(fingerprints)
+--Returns an error string if there is something wrong with 
+--fingerprint table. 
+--Modified's version of http-enums validation code
+--@param fingerprints Fingerprint table
+--@return Error string if its an invalid fingerprint table
+---
+local function validate_fingerprints(fingerprints)
+
+  for i, fingerprint in pairs(fingerprints) do
+    if(type(i) ~= 'number') then
+      return "The 'fingerprints' table is an array, not a table; all indexes should be numeric"
+    end
+    -- Validate paths
+    if(not(fingerprint.paths) or
+      (type(fingerprint.paths) ~= 'table' and type(fingerprint.paths) ~= 'string') or
+      (type(fingerprint.paths) == 'table' and #fingerprint.paths == 0)) then
+      return "Invalid path found in fingerprint entry #" .. i
+    end
+    if(type(fingerprint.paths) == 'string') then
+      fingerprint.paths = {fingerprint.paths}
+    end
+    for i, path in pairs(fingerprint.paths) do
+      -- Validate index
+      if(type(i) ~= 'number') then
+        return "The 'paths' table is an array, not a table; all indexes should be numeric"
+      end
+      -- Convert the path to a table if it's a string
+      if(type(path) == 'string') then
+        fingerprint.paths[i] = {path=fingerprint.paths[i]}
+        path = fingerprint.paths[i]
+      end
+      -- Make sure the paths table has a 'path'
+      if(not(path['path'])) then
+        return "The 'paths' table requires each element to have a 'path'."
+      end
+    end
+     -- Make sure they include the login function
+    if(type(fingerprint.login_check) ~= "function") then
+      return "Missing or invalid login_check function in entry #"..i
+    end
+      -- Are they missing any fields?
+    if(fingerprint.category and type(fingerprint.category) ~= "string") then
+      return "Missing or invalid category in entry #"..i
+    end
+    if(fingerprint.name and type(fingerprint.name) ~= "string") then
+      return "Missing or invalid name in entry #"..i
+    end
+    if(fingerprint.login_username and type(fingerprint.login_username) ~= "string") then
+      return "Missing or invalid login_username in entry #"..i
+    end
+    if(fingerprint.login_password and type(fingerprint.login_password) ~= "string") then
+      return "Missing or invalid login_password in entry #"..i
+    end
+
+  end
+end
 
 ---
 -- load_fingerprints(filename, category)
@@ -65,7 +128,8 @@ local function load_fingerprints(filename, cat)
     return nmap.registry.http_default_accounts_fingerprints
   end
 
-  -- Try and find the file; if it isn't in Nmap's directories, take it as a direct path
+  -- Try and find the file
+  -- If it isn't in Nmap's directories, take it as a direct path
   filename_full = nmap.fetchfile('nselib/data/' .. filename)
   if(not(filename_full)) then
     filename_full = filename
@@ -82,61 +146,10 @@ local function load_fingerprints(filename, cat)
   file()
   fingerprints = getfenv(file)["fingerprints"]
 
-  -- Sanity check our file to ensure that all the fields were good.
-  for i, fingerprint in pairs(fingerprints) do
-
-    -- Make sure we have a valid index
-    if(type(i) ~= 'number') then
-      return false, "The 'fingerprints' table is an array, not a table; all indexes should be numeric"
-    end
-    -- Make sure they have either a string or a table of paths
-    if(not(fingerprint.paths) or
-      (type(fingerprint.paths) ~= 'table' and type(fingerprint.paths) ~= 'string') or
-      (type(fingerprint.paths) == 'table' and #fingerprint.paths == 0)) then
-      return false, "Invalid path found in fingerprint entry #" .. i
-    end
-
-    -- Make sure fingerprint.path is a table
-    if(type(fingerprint.paths) == 'string') then
-      fingerprint.paths = {fingerprint.paths}
-    end
-
-    -- Make sure the elements in the paths array are strings or arrays
-    for i, path in pairs(fingerprint.paths) do
-      -- Make sure we have a valid index
-      if(type(i) ~= 'number') then
-        return false, "The 'paths' table is an array, not a table; all indexes should be numeric"
-      end
-
-      -- Convert the path to a table if it's a string
-      if(type(path) == 'string') then
-        fingerprint.paths[i] = {path=fingerprint.paths[i]}
-        path = fingerprint.paths[i]
-      end
-
-      -- Make sure the probes table has a 'path'
-      if(not(path['path'])) then
-        return false, "The 'paths' table requires each element to have a 'path'."
-      end
-    end
-     -- Make sure they include the login function
-    if(type(fingerprint.login_check) ~= "function") then
-      return false, "Missing or invalid login_check function in entry #"..i
-    end
-      -- Are missing any fields?
-    if(fingerprint.category and type(fingerprint.category) ~= "string") then
-      return false, "Missing or invalid category in entry #"..i
-    end
-    if(fingerprint.name and type(fingerprint.name) ~= "string") then
-      return false, "Missing or invalid name in entry #"..i
-    end
-    if(fingerprint.login_username and type(fingerprint.login_username) ~= "string") then
-      return false, "Missing or invalid login_username in entry #"..i
-    end
-    if(fingerprint.login_password and type(fingerprint.login_password) ~= "string") then
-      return false, "Missing or invalid login_password in entry #"..i
-    end
-
+  -- Validate fingerprints
+  local valid_flag = validate_fingerprints(fingerprints)
+  if type(valid_flag) == "string" then
+    return false, valid_flag
   end
 
   -- Category filter
@@ -219,7 +232,7 @@ action = function(host, port)
   --Format basepath: Removes or adds slashs
   basepath = format_basepath(basepath)
 
-  -- Add requests to http pipeline
+  -- Add requests to the http pipeline
   requests = {}
   stdnse.print_debug(1, "%s: Searching for entries under path '%s' (change with '%s.basepath' argument)", SCRIPT_NAME, basepath, SCRIPT_NAME)
   for i = 1, #fingerprints, 1 do
@@ -228,13 +241,13 @@ action = function(host, port)
     end
   end
 
-  -- Perform all the requests 
+  -- Nuclear launch detected!
   results = http.pipeline_go(host, port, requests, nil)
   if results == nil then
     return "[ERROR] HTTP request table is empty. This should not happen since we at least made one request."
   end
 
-  -- Record 404 response
+  -- Record 404 response, later it will be used to determine if page exists
   local result, result_404, known_404 = http.identify_404(host, port)
   if(result == false) then
     return stdnse.format_output(false, result_404)
@@ -252,7 +265,7 @@ action = function(host, port)
         if( http.page_exists(results[j], result_404, known_404, path, true) ) then
           --Check default credentials
           if( fingerprint.login_check(host, port, path, fingerprint.login_username, fingerprint.login_password) ) then
-            --Valid credentials
+            --Valid credentials found
             stdnse.print_debug(1, "%s valid default credentials found.", fingerprint.name)
             output_lns[#output_lns + 1] = string.format("[%s] credentials found -> %s:%s Path:%s", 
                                           fingerprint.name, fingerprint.login_username, fingerprint.login_password, path)
@@ -265,6 +278,7 @@ action = function(host, port)
       j = j + 1
     end
   end
+
   if #output_lns > 0 then
     return stdnse.strjoin("\n", output_lns)
   end
