@@ -23,8 +23,9 @@ table.insert(fingerprints, {
     {path = "/cacti/"},
     {path = "/monitoring/cacti/"}
   },
-  login_username = "admin",
-  login_password = "admin",
+  login_combos = {
+    {username = "admin", password = "admin"}
+  },
   login_check = function (host, port, path, user, pass)
     local req = http.post(host, port, path.."index.php", {no_cache=true}, nil, {action="login", login_username=user, login_password=pass})
     if not(http.response_contains(req, 'Invalid User Name/Password')) then
@@ -41,8 +42,10 @@ table.insert(fingerprints, {
     {path = "/manager/html/"},
     {path = "/tomcat/manager/html/"}
   },
-  login_username = "tomcat",
-  login_password = "tomcat",
+  login_combos = {
+    {username = "tomcat", password = "tomcat"},
+    {username = "admin", password = "admin"}
+  },
   login_check = function (host, port, path, user, pass)
     local credentials = {username = user, password = pass}
     local req = http.get(host, port, path, {no_cache=true, auth=credentials})

@@ -89,6 +89,18 @@ local function validate_fingerprints(fingerprints)
         return "The 'paths' table requires each element to have a 'path'."
       end
     end
+    -- Check login combos
+    for i, combo in pairs(fingerprint.login_combos) do
+      -- Validate index
+      if(type(i) ~= 'number') then
+        return "The 'login_combos' table is an array, not a table; all indexes should be numeric"
+      end
+      -- Make sure the login_combos table has at least one login combo
+      if(not(combo['username']) or not(combo["password"])) then
+        return "The 'login_combos' table requires each element to have a 'username' and 'password'."
+      end
+    end
+
      -- Make sure they include the login function
     if(type(fingerprint.login_check) ~= "function") then
       return "Missing or invalid login_check function in entry #"..i
@@ -100,13 +112,6 @@ local function validate_fingerprints(fingerprints)
     if(fingerprint.name and type(fingerprint.name) ~= "string") then
       return "Missing or invalid name in entry #"..i
     end
-    if(fingerprint.login_username and type(fingerprint.login_username) ~= "string") then
-      return "Missing or invalid login_username in entry #"..i
-    end
-    if(fingerprint.login_password and type(fingerprint.login_password) ~= "string") then
-      return "Missing or invalid login_password in entry #"..i
-    end
-
   end
 end
 
@@ -262,17 +267,19 @@ action = function(host, port)
         local path = basepath .. probe['path']
 
         if( http.page_exists(results[j], result_404, known_404, path, true) ) then
-          --Check default credentials
-          if( fingerprint.login_check(host, port, path, fingerprint.login_username, fingerprint.login_password) ) then
-
-            --Valid credentials found
-            stdnse.print_debug(1, "%s valid default credentials found.", fingerprint.name)
-            output_lns[#output_lns + 1] = string.format("[%s] credentials found -> %s:%s Path:%s", 
-                                          fingerprint.name, fingerprint.login_username, fingerprint.login_password, path)
-            -- Add to http credentials table
-            register_http_credentials(fingerprint.login_username, fingerprint.login_password)
-         end
-
+          for _, login_combo in ipairs(fingerprint.login_combos) do
+            stdnse.print_debug(2, "%s: Trying login combo -> %s:%s", SCRIPT_NAME, login_combo["username"], login_combo["password"])
+            --Check default credentials
+            if( fingerprint.login_check(host, port, path, login_combo["username"], login_combo["password"]) ) then
+              
+              --Valid credentials found
+              stdnse.print_debug(1, "%s:[%s] valid default credentials found.", SCRIPT_NAME, fingerprint.name)
+              output_lns[#output_lns + 1] = string.format("[%s] credentials found -> %s:%s Path:%s", 
+                                          fingerprint.name, login_combo["username"], login_combo["password"], path)
+              -- Add to http credentials table
+              register_http_credentials(login_combo["username"], login_combo["password"])
+            end
+          end
         end
       end
       j = j + 1
