@@ -20,8 +20,7 @@ table.insert(fingerprints, {
   name = "Cacti",
   category = "web",
   paths = {
-    {path = "/cacti/"},
-    {path = "/monitoring/cacti/"}
+    {path = "/cacti/"}
   },
   login_combos = {
     {username = "admin", password = "admin"}

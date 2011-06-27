@@ -14,13 +14,12 @@ Please help improve this script by adding new entries to nselib/data/http-defaul
 Remember each fingerprint must have:
 * <code>name</code> - Descriptive name
 * <code>category</code> - Category
-* <code>login_username</code> - Default username
-* <code>login_password</code> - Default password
+* <code>login_combos</code> - Table of login combinations
 * <code>paths</code> - Paths table containing the possible location of the target
 * <code>login_check</code> - Login function of the target
 
 Default fingerprint file: /nselib/data/http-default-accounts-fingerprints.lua 
-This script was based in http-enum. 
+This script was based on http-enum. 
 ]]
 
 ---
@@ -48,8 +47,6 @@ categories = {"discovery", "auth", "safe"}
 require "http"
 require "shortport"
 portrule = shortport.http
-
-local SCRIPT_NAME = "http-default-accounts"
 
 ---
 --validate_fingerprints(fingerprints)
