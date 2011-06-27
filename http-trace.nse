@@ -1,10 +1,10 @@
 description = [[
-Sends an HTTP TRACE request and shows if the method TRACE is enabled and returns the header fields that were modified in the response.
+Sends an HTTP TRACE request and shows if the method TRACE is enabled. If debug is enabled, it returns the header fields that were modified in the response.
 ]]
 
 ---
 -- @usage
--- nmap --script http-trace <ip>
+-- nmap --script http-trace -d <ip>
 --
 -- @output
 -- 80/tcp open  http    syn-ack
@@ -22,7 +22,7 @@ author = "Paulino Calderon"
 
 license = "Same as Nmap--See http://nmap.org/book/man-legal.html"
 
-categories = {"discovery", "safe"}
+categories = {"vuln", "discovery", "safe"}
 
 require "shortport"
 require "stdnse"
@@ -41,12 +41,12 @@ local validate = function(response, response_headers)
   else
     output_lines[ #output_lines+1 ] = "TRACE is enabled"
   end
-
-  output_lines[ #output_lines+1 ]= "Headers:"
-  for _, value in pairs(response_headers) do
-    output_lines [ #output_lines+1 ] = value
+  if nmap.verbosity() >= 2 then 
+    output_lines[ #output_lines+1 ]= "Headers:"
+    for _, value in pairs(response_headers) do
+      output_lines [ #output_lines+1 ] = value
+    end
   end
-
   if #output_lines > 0 then
     return stdnse.strjoin("\n", output_lines)
   end 
