@@ -72,7 +72,8 @@ action = function(host, port)
   response = http.get(host, port, evil_uri)
   if response.body and response.status==200 then
     if response.body:match("unknowntopic") then
-      return "[Error] File was not found or the web server has insufficient permissions"
+      stdnse.print_debug(1, "%s:[Error] The server is not vulnerable, '%s' was not found or the web server has insufficient permissions to read it", SCRIPT_NAME, rfile)
+      return
     end
     _, _, rfile_content = string.find(response.body, '<pre>(.*)<!%-%- Majordomo help_foot format file %-%->')
     output_lines[#output_lines+1] = rfile.." was found:\n"..rfile_content
