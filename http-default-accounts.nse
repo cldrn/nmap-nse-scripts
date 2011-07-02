@@ -1,13 +1,14 @@
 description = [[
-http-default-accounts tests for access with default credentials in a variety of web applications and devices.
+http-default-accounts tests for access with default credentials in a variety of web applications and devices.  
 
+It works similar to http-enum, we detect applications by matching known paths and launching a login routine using default credentials when found.
 This script depends on a fingerprint file containing the target's information: name, category, location paths, default credentials and login routine.
-http-default-accounts searches the paths and if a page is found, it launches the corresponding login routine to check if the default login credentials are valid.
 
 You may select a category if you wish to reduce the number of requests. We have categories like:
 * <code>web</code> - Web applications
 * <code>router</code> - Routers
 * <code>voip</code> - VOIP devices
+* <code>security</code> 
 
 Please help improve this script by adding new entries to nselib/data/http-default-accounts.lua
 
@@ -44,6 +45,7 @@ author = "Paulino Calderon"
 license = "Same as Nmap--See http://nmap.org/book/man-legal.html"
 categories = {"discovery", "auth", "safe"}
 
+require "creds"
 require "http"
 require "shortport"
 portrule = shortport.http
@@ -202,13 +204,8 @@ end
 -- @param login_password Password
 ---
 local function register_http_credentials(login_username, login_password) 
-  if ( not( nmap.registry['credentials'] ) ) then
-    nmap.registry['credentials'] = {}
-  end
-  if ( not( nmap.registry.credentials['http'] ) ) then
-    nmap.registry.credentials['http'] = {}
-  end
-  table.insert( nmap.registry.credentials.http, { username = login_username, password = login_password } )
+  local c = creds.Credentials:new( SCRIPT_NAME, host, port )
+  c:add(login_username, login_password, creds.State.VALID )
 end
 
 ---

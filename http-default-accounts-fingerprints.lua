@@ -5,8 +5,9 @@
 -- STRUCTURE:
 -- * <code>name</code> - Descriptive name
 -- * <code>category</code> - Category
--- * <code>login_username</code> - Default username
--- * <code>login_password</code> - Default password
+-- * <code>login_combos</code>
+---- * <code>username</code> - Default username
+---- * <code>password</code> - Default password
 -- * <code>paths</code> - Paths table containing the possible location of the target
 -- * <code>login_check</code> - Login function of the target
 ---
