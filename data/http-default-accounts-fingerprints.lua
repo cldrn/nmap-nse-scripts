@@ -5,11 +5,20 @@
 -- STRUCTURE:
 -- * <code>name</code> - Descriptive name
 -- * <code>category</code> - Category
--- * <code>login_username</code> - Default username
--- * <code>login_password</code> - Default password
+-- * <code>login_combos</code>
+---- * <code>username</code> - Default username
+---- * <code>password</code> - Default password
 -- * <code>paths</code> - Paths table containing the possible location of the target
 -- * <code>login_check</code> - Login function of the target
 ---
+local function try_http_basic_login(host, port, path, user, pass)
+    local credentials = {username = user, password = pass}
+    local req = http.get(host, port, path, {no_cache=true, auth=credentials})
+    if req.status ~= 401 and req.status ~= 403 then
+      return true
+    end
+    return false
+end
 
 fingerprints = {}
 
@@ -46,12 +55,7 @@ table.insert(fingerprints, {
     {username = "admin", password = "admin"}
   },
   login_check = function (host, port, path, user, pass)
-    local credentials = {username = user, password = pass}
-    local req = http.get(host, port, path, {no_cache=true, auth=credentials})
-    if req.status ~= 401 and req.status ~= 403 then
-      return true
-    end
-    return false
+    return try_http_basic_login(host, port, path, user, pass)
   end
 })
 
