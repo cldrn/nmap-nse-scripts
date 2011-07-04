@@ -32,7 +32,7 @@ table.insert(fingerprints, {
     {path = "/cacti/"}
   },
   login_combos = {
-    {username = "admin", password = "admin"}
+    {username = "admin", password = "XKhwsFVAd4kl"}
   },
   login_check = function (host, port, path, user, pass)
     local req = http.post(host, port, path.."index.php", {no_cache=true}, nil, {action="login", login_username=user, login_password=pass})
