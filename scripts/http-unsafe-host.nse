@@ -1,7 +1,7 @@
 description = [[
-http-unsafe-host checks URLs against Google's list of suspected malware and phishing servers. 
+http-unsafe-host checks if hosts are on Google's blacklist of suspected malware and phishing servers. These lists are constantly updated and are part of Google's Safe Browsing service.
 
-To use this script you need to have an API key to access Google's Safe Browsing Lookup services.
+To use this script you need to have your own API key to access Google's Safe Browsing Lookup services. Sign up for yours at http://code.google.com/apis/safebrowsing/key_signup.html
 
 * To learn more about Google's Safe Browsing:
 http://code.google.com/apis/safebrowsing/
@@ -19,7 +19,6 @@ http://code.google.com/apis/safebrowsing/key_signup.html
 -- 80/tcp open  http
 -- |_http-unsafe-host.nse: Host is known for distributing malware.
 --
--- @args http-unsafe-host.apikey Your personal Google Safe Browsing API key. 
 -- @args http-unsafe-host.url URL to check. Default: <code>http/https</code>://<code>host</code> 
 ---
 
@@ -32,7 +31,12 @@ require "shortport"
 
 portrule = shortport.http
 
+---#########################
+--ENTER YOUR API KEY HERE  #
+---#########################
 local APIKEY = ""
+---#########################
+
 local API_QRY = "https://sb-ssl.google.com/safebrowsing/api/lookup?client="..SCRIPT_NAME.."&apikey="..APIKEY.."&appver=1.5.2&pver=3.0&url="
 
 action = function(host, port)
@@ -64,7 +68,7 @@ action = function(host, port)
       malware_found = true
     end
   end
-  
+  --For the verbose lovers
   if nmap.verbosity() >= 2 and not(malware_found) then
     output_lns[#output_lns+1] = "Host is safe to browse."
   end
