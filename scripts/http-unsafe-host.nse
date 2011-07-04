@@ -1,7 +1,7 @@
 description = [[
 http-unsafe-host checks URLs against Google's list of suspected malware and phishing servers. 
 
-To use this script you need to have an API key to accessGoogle's Safe Browsing Lookup services.
+To use this script you need to have an API key to access Google's Safe Browsing Lookup services.
 
 * To learn more about Google's Safe Browsing:
 http://code.google.com/apis/safebrowsing/
@@ -45,7 +45,7 @@ action = function(host, port)
   local target = nmap.registry.args["http-unsafe-host.url"] or string.format("%s://%s", port.service, host.targetname) 
 
   if string.len(APIKEY) < 25 then
-    return string.format("[ERROR] No API key found. Update the variable APIKEY in %s or use the argument 'http-unsafe-host.apikey'",
+    return string.format("[ERROR] No API key found. Update the variable APIKEY in %s.",
                          SCRIPT_NAME) 
   end
  
