@@ -15,13 +15,6 @@ Original advisory:
 -- | http-wp-enum: 
 -- | Username found: admin
 -- | Username found: mauricio
--- | Username found: box
--- | Username found: carlos
--- | Username found: laura
--- | Username found: fer
--- | Username found: daniel
--- | Username found: javi
--- | Username found: daz
 -- | Username found: cesar
 -- | Username found: lean
 -- | Username found: alex
@@ -29,6 +22,7 @@ Original advisory:
 -- 
 -- @args http-wp-enum.limit Upper limit for ID search. Default: 25
 -- @args http-wp-enum.basepath Base path to Wordpress
+-- @args http-wp-enum.out Output filename
 ---
 
 author = "Paulino Calderon"
@@ -80,13 +74,31 @@ local function check_wp(host, port, path)
 end
 
 ---
+--Writes string to file
+--Taken from: hostmap.nse
+--@param filename Target filename
+--@param contents String to save
+--@return true when successful
+local function write_file(filename, contents)
+  local f, err = io.open(filename, "w")
+  if not f then
+    return f, err
+  end
+  f:write(contents)
+  f:close()
+  return true
+end
+
+
+---
 --MAIN
 ---
 action = function(host, port)
   local basepath = nmap.registry.args["http-wp-enum.basepath"] or "/"
   local limit = nmap.registry.args["http-wp-enum.limit"] or 25
+  local filewrite = nmap.registry.args["http-wp-enum.out"]
   local output = {""}
-
+  local users = {}
   --First, we check this is WP
   if not(check_wp(host, port, basepath)) then
     if nmap.verbosity() >= 2 then
@@ -102,9 +114,19 @@ action = function(host, port)
     if user then
       stdnse.print_debug(1, "%s: Username found -> %s", SCRIPT_NAME, user)
       output[#output+1] = string.format("Username found: %s", user)
+      users[#users+1] = user
     end
   end
 
+  if filewrite and #users>0 then
+    local status, err = write_file(filewrite,  stdnse.strjoin("\n", users))
+    if status then
+      output[#output+1] = string.format("Users saved to %s\n", filewrite)
+    else
+      output[#output+1] = string.format("Error saving %s: %s\n", filewrite, err)
+    end
+  end
+ 
   if #output > 1 then
     return stdnse.strjoin("\n", output)
   end
