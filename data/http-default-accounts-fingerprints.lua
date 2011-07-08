@@ -87,8 +87,6 @@ table.insert(fingerprints, {
     return try_http_basic_login(host, port, path, user, pass)
   end
 })
-
-
 ---
 --ROUTERS
 ---
