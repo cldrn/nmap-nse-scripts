@@ -31,6 +31,7 @@ categories = {"discovery", "auth", "safe", "vuln"}
 
 require "shortport"
 require "http"
+require "creds"
 
 portrule = shortport.http
 
@@ -115,6 +116,9 @@ action = function(host, port)
       stdnse.print_debug(1, "%s: Username found -> %s", SCRIPT_NAME, user)
       output[#output+1] = string.format("Username found: %s", user)
       users[#users+1] = user
+      local c = creds.Credentials:new( SCRIPT_NAME, host, port )
+      c:add(user, nil, creds.State.VALID )
+
     end
   end
 

@@ -86,7 +86,7 @@ Driver = {
 
   login = function( self, username, password )
     -- Note the no_cache directive
-    stdnse.print_debug(2, "HTTP POST %s%s\n", self.host, self.uri)
+    stdnse.print_debug(2, "HTTP POST %s%s", self.host.name, self.uri)
     local response = http.post( self.host, self.port, self.uri, { no_cache = true }, nil, { [self.options.uservar] = username, [self.options.passvar] = password } )
                 -- This redirect is taking us to /wp-admin
     if response.status == 302 then
@@ -133,6 +133,8 @@ action = function( host, port )
 
   engine = brute.Engine:new( Driver, host, port, { uservar = uservar, passvar = passvar } )
   engine:setMaxThreads(thread_num)
+  engine.options.script_name = SCRIPT_NAME
+
   status, result = engine:start()
 
   return result
