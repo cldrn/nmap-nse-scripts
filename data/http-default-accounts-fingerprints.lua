@@ -120,7 +120,7 @@ table.insert(fingerprints, {
     {username = "cisco", password = "cisco"}
   },
   login_check = function (host, port, path, user, pass)
-    return try_basic_login(host, port, path, user, pass)
+    return try_http_basic_login(host, port, path, user, pass)
   end
 })
 
