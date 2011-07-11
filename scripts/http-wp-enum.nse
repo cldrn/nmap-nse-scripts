@@ -95,9 +95,9 @@ end
 --MAIN
 ---
 action = function(host, port)
-  local basepath = nmap.registry.args["http-wp-enum.basepath"] or "/"
-  local limit = nmap.registry.args["http-wp-enum.limit"] or 25
-  local filewrite = nmap.registry.args["http-wp-enum.out"]
+  local basepath = stdnse.get_script_args("http-wp-enum.basepath") or "/"
+  local limit = stdnse.get_script_args("http-wp-enum.limit") or 25
+  local filewrite = stdnse.get_script_args("http-wp-enum.out")
   local output = {""}
   local users = {}
   --First, we check this is WP
