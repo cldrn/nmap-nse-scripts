@@ -35,7 +35,7 @@ action = function(host, port)
   end
 
   --we append a null byte followed by ".txt" to retrieve the source code
-  local req = http.get(host, port, "/"..rfile.."\00.txt")
+  local req = http.get(host, port, rfile.."\00.txt")
 
   --If we don't get status 200, the server is not vulnerable
   if req.status then

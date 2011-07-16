@@ -1,5 +1,5 @@
 description = [[
-http-axis2-dir-traversal exploits a directory traversal vulnerability in Apache Axis2 version 1.4.1 by sending a specially crafted request to the parameter <code>xsd</code> (OSVDB-59001). By default it will try to retrieve the configuration file of the Axis2 service <code>'/conf/axis2.xml'</code> and use the path <code>'/axis2/services/'</code> to return the username and password of the admin account.
+http-axis2-dir-traversal exploits a directory traversal vulnerability in Apache Axis2 version 1.4.1 by sending a specially crafted request to the parameter <code>xsd</code> (OSVDB-59001). By default it will try to retrieve the configuration file of the Axis2 service <code>'/conf/axis2.xml'</code> using the path <code>'/axis2/services/'</code> to return the username and password of the admin account.
 
 To exploit this vulnerability we need to detect a valid service running on the installation so we extract it from <code>/listServices</code> before exploiting the directory traversal vulnerability.
 By default it will retrieve the configuration file if you wish to retrieve other files you may need to add more "/../" to traverse to the correct folder location.
@@ -21,6 +21,8 @@ Reference:
 -- |_http-axis2-dir-traversal.nse: Admin credentials found -> admin:axis2
 --
 -- @args http-axis2-dir-traversal.file Remote file to retrieve
+-- @args http-axis2-dir-traversal.outfile Output file
+-- @args http-axis2-dir-traversal.basepath Basepath to the services page. Default: <code>/axis2/services/</code>
 --
 -- Other useful arguments for this script:
 -- @args http.useragent User Agent used in the GET requests
