@@ -54,6 +54,7 @@ categories = {"intrusive", "auth"}
 require 'shortport'
 require 'http'
 require 'brute'
+require 'creds'
 
 portrule = shortport.http
 
@@ -70,9 +71,9 @@ Driver = {
     local o = {}
     setmetatable(o, self)
     self.__index = self
-    o.host = nmap.registry.args['http-wordpress-brute.hostname'] or host
+    o.host = stdnse.get_script_args('http-wordpress-brute.hostname') or host
     o.port = port
-    o.uri = nmap.registry.args['http-wordpress-brute.uri'] or DEFAULT_WP_URI
+    o.uri = stdnse.get_script_args('http-wordpress-brute.uri') or DEFAULT_WP_URI
     o.options = options
     return o
   end,
@@ -86,17 +87,12 @@ Driver = {
 
   login = function( self, username, password )
     -- Note the no_cache directive
-    stdnse.print_debug(2, "HTTP POST %s%s", self.host.name, self.uri)
+    stdnse.print_debug(2, "HTTP POST %s%s\n", self.host, self.uri)
     local response = http.post( self.host, self.port, self.uri, { no_cache = true }, nil, { [self.options.uservar] = username, [self.options.passvar] = password } )
                 -- This redirect is taking us to /wp-admin
     if response.status == 302 then
-      if ( not( nmap.registry['credentials'] ) ) then
-        nmap.registry['credentials'] = {}
-      end
-      if ( not( nmap.registry.credentials['http'] ) ) then
-        nmap.registry.credentials['http'] = {}
-      end
-      table.insert( nmap.registry.credentials.http, { username = username, password = password } )
+      local c = creds.Credentials:new( SCRIPT_NAME, self.host, self.port )
+      c:add(username, password, creds.State.VALID ) 
       return true, brute.Account:new( username, password, "OPEN")
     end
 
@@ -127,14 +123,13 @@ Driver = {
 ---
 action = function( host, port )
   local status, result, engine
-  local uservar = nmap.registry.args['http-wordpress-brute.uservar'] or DEFAULT_WP_USERVAR
-  local passvar = nmap.registry.args['http-wordpress-brute.passvar'] or DEFAULT_WP_PASSVAR
-  local thread_num = nmap.registry.args["http-wordpress-brute.threads"] or DEFAULT_THREAD_NUM
+  local uservar = stdnse.get_script_args('http-wordpress-brute.uservar') or DEFAULT_WP_USERVAR
+  local passvar = stdnse.get_script_args('http-wordpress-brute.passvar') or DEFAULT_WP_PASSVAR
+  local thread_num = stdnse.get_script_args("http-wordpress-brute.threads") or DEFAULT_THREAD_NUM
 
   engine = brute.Engine:new( Driver, host, port, { uservar = uservar, passvar = passvar } )
   engine:setMaxThreads(thread_num)
   engine.options.script_name = SCRIPT_NAME
-
   status, result = engine:start()
 
   return result

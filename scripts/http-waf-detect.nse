@@ -1,12 +1,12 @@
 description = [[
-Determines if a web server is protected by an IPS (Intrusion Prevention System), IDS (Intrusion Detection System) or WAF (Web Application Firewall)
+Determines if a web server is protected by an IPS (Intrusion Prevention System), IDS (Intrusion Detection System) or WAF (Web Application Firewall) by probing the web server with malicious payloads and detecting changes in the response code and body.
 
-This script tries to determine if an IDS/IPS/WAF is protecting a http server. To do this the script will send a "good" request and record the
-response, afterwards it will match this response against new requests containing malicious payloads. In theory, web applications shouldn't react to 
-malicious requests because we are storing the payloads in a variable that is not used by the script/file and only WAF/IDS/IPS should react to it. 
+To do this the script will send a "good" request and record the response, afterwards it will match this response against new requests containing 
+malicious payloads. In theory, web applications shouldn't react to malicious requests because we are storing the payloads in a variable that is 
+not used by the script/file and only WAF/IDS/IPS should react to it. 
 If aggro mode is not on, the script will only do the minimum number of requests (Most known/noisy vectors)
 
-This script has been tested against:
+This script has been tested and detects properly the presence of the following products:
  * Apache ModSecurity 
  * Barracuda Web Application Firewall 
  * PHPIDS 
@@ -21,23 +21,24 @@ Since the majority of IDS/IPS/WAF's protect web applications in the same way,
 
 ---
 -- @usage
--- nmap -p80 --script=../../http-waf-detect.nse --script-args="http-waf-detect.aggro=2,http-waf-detect.path=/testphp.vulnweb.com/artists.php" www.modsecurity.org
+-- nmap -p80 --script=../../http-waf-detect.nse --script-args="http-waf-detect.aggro,http-waf-detect.path=/testphp.vulnweb.com/artists.php" www.modsecurity.org
 --
 -- @output
 -- PORT   STATE SERVICE
 -- 80/tcp open  http
 -- |_http-waf-detect: IDS/IPS/WAF detected
 --
--- @args http-waf-detect.path Path to target. It is more effective if you specify a path that doesn't return a redirect
+-- @args http-waf-detect.uri Target URI. It is more effective if you specify a path that doesn't return a redirect
 -- @args http-waf-detect.aggro true/false . If aggro mode is on, script will try all attack vectors to trigger the IDS/IPS/WAF
--- 
+-- @args http-waf-detect.detectBodyChanges true/false. If set it also checks for changes in the document's body
+--
 -- Other useful args when running this script
 -- http.useragent User Agent for HTTP requests
 -- http.pipeline Number of requests sent in the single request
 
 author = "Paulino Calderon"
 license = "Same as Nmap--See http://nmap.org/book/man-legal.html"
-categories = {"discovery"}
+categories = {"discovery", "intrusive"}
 
 require "http"
 require "shortport"
@@ -57,10 +58,12 @@ local attack_vectors_n2 = {"?p4yl04d=cat /etc/shadow", "?p4yl04d=id;uname -a", "
 
 action = function(host, port)
   local orig_req, tests
-  local path = nmap.registry.args["http-waf-detect.path"] or "/"
-  local aggro = nmap.registry.args["http-waf-detect.aggro"] or false
+  local path = stdnse.get_script_args("http-waf-detect.uri") or "/"
+  local aggro = stdnse.get_script_args("http-waf-detect.aggro") or false
+  local use_body = stdnse.get_script_args("http-waf-detect.detectBodyChanges") or false
 
   --get original response from a "good" request
+  stdnse.print_debug(1, "%s: Requesting URI %s", SCRIPT_NAME, path) 
   orig_req = http.get(host, port, path)
   orig_req.body = http.clean_404(orig_req.body)
   if orig_req.status and orig_req.body then
@@ -68,7 +71,6 @@ action = function(host, port)
   else
     return "[ERROR] Initial HTTP request failed"
   end
-
   --if aggro mode on, try all vectors
   if aggro then
     for _, vector in pairs(attack_vectors_n2) do
@@ -92,7 +94,7 @@ action = function(host, port)
   local waf_bool = false
   for i, res in pairs(test_results) do
     res.body = http.clean_404(res.body)
-    if orig_req.status ~= res.status or orig_req.body ~= res.body then
+    if orig_req.status ~= res.status or ( use_body and orig_req.body ~= res.body) then
       stdnse.print_debug(1, "Payload:%s trigerred the IDS/IPS/WAF", attack_vectors_n1[i])
       if res.status and res.body then
         stdnse.print_debug(2, "Status:%s Body:%s\n", res.status, res.body)

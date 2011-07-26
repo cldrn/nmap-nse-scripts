@@ -63,9 +63,9 @@ action = function(host, port)
   local response, rfile, rpath, uri, evil_uri, rfile_content, filewrite
   local output_lines = {}
 
-  filewrite = nmap.registry.args["http-majordomo2-dir-traversal.outfile"]
-  uri = nmap.registry.args["http-majordomo2-dir-traversal.uri"] or MAJORDOMO2_EXPLOIT_URI
-  rfile = nmap.registry.args["http-majordomo2-dir-traversal.rfile"] or DEFAULT_REMOTE_FILE
+  filewrite = stdnse.get_script_args("http-majordomo2-dir-traversal.outfile")
+  uri = stdnse.get_script_args("http-majordomo2-dir-traversal.uri") or MAJORDOMO2_EXPLOIT_URI
+  rfile = stdnse.get_script_args("http-majordomo2-dir-traversal.rfile") or DEFAULT_REMOTE_FILE
   evil_uri = uri..MAJORDOMO2_EXPLOIT_QRY..rfile
 
   stdnse.print_debug(1, "HTTP GET %s%s", stdnse.get_hostname(host), evil_uri)

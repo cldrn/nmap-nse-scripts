@@ -31,7 +31,6 @@ categories = {"discovery", "auth", "safe", "vuln"}
 
 require "shortport"
 require "http"
-require "creds"
 
 portrule = shortport.http
 
@@ -96,7 +95,7 @@ end
 ---
 action = function(host, port)
   local basepath = stdnse.get_script_args("http-wp-enum.basepath") or "/"
-  local limit = stdnse.get_script_args("http-wp-enum.limit") or 25
+  local limit = stdnse.get_script_args(SCRIPT_NAME..".limit") or 25
   local filewrite = stdnse.get_script_args("http-wp-enum.out")
   local output = {""}
   local users = {}
@@ -116,9 +115,6 @@ action = function(host, port)
       stdnse.print_debug(1, "%s: Username found -> %s", SCRIPT_NAME, user)
       output[#output+1] = string.format("Username found: %s", user)
       users[#users+1] = user
-      local c = creds.Credentials:new( SCRIPT_NAME, host, port )
-      c:add(user, nil, creds.State.VALID )
-
     end
   end
 

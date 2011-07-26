@@ -54,6 +54,7 @@ categories = {"intrusive", "auth"}
 require 'shortport'
 require 'http'
 require 'brute'
+require 'creds'
 
 portrule = shortport.http
 
@@ -73,9 +74,9 @@ Driver = {
     local o = {}
     setmetatable(o, self)
     self.__index = self
-    o.host = nmap.registry.args['http-joomla-brute.hostname'] or host
+    o.host = stdnse.get_script_args('http-joomla-brute.hostname') or host
     o.port = port
-    o.uri = nmap.registry.args['http-joomla-brute.uri'] or DEFAULT_JOOMLA_LOGIN_URI
+    o.uri = stdnse.get_script_args('http-joomla-brute.uri') or DEFAULT_JOOMLA_LOGIN_URI
 		o.options = options
     return o
 	end,
@@ -92,17 +93,11 @@ Driver = {
     
     if response.body and not( response.body:match('name=[\'"]*'..self.options.passvar ) ) then
       stdnse.print_debug(2, "Response:\n%s", response.body)
-      if ( not( nmap.registry['credentials'] ) ) then
-        nmap.registry['credentials'] = {}
-		  end
-		  if ( not( nmap.registry.credentials['http'] ) ) then
-		    nmap.registry.credentials['http'] = {}
-	    end
-		  table.insert( nmap.registry.credentials.http, { username = username, password = password } )
-		  return true, brute.Account:new( username, password, "OPEN")
-		end
-		
-		return false, brute.Error:new( "Incorrect password" )
+      local c = creds.Credentials:new(SCRIPT_NAME, self.host, self.port )
+      c:add(username, password, creds.State.VALID )
+      return true, brute.Account:new( username, password, "OPEN")
+    end
+    return false, brute.Error:new( "Incorrect password" )
 	end,
 	
 	disconnect = function( self ) 
@@ -139,12 +134,13 @@ Driver = {
 ---
 action = function( host, port )
   local status, result, engine
-  local uservar = nmap.registry.args['http-joomla-brute.uservar'] or DEFAULT_JOOMLA_USERVAR
-  local passvar = nmap.registry.args['http-joomla-brute.passvar'] or DEFAULT_JOOMLA_PASSVAR
-  local thread_num = nmap.registry.args["http-joomla-brute.threads"] or DEFAULT_THREAD_NUM
+  local uservar = stdnse.get_script_args('http-joomla-brute.uservar') or DEFAULT_JOOMLA_USERVAR
+  local passvar = stdnse.get_script_args('http-joomla-brute.passvar') or DEFAULT_JOOMLA_PASSVAR
+  local thread_num = stdnse.get_script_args("http-joomla-brute.threads") or DEFAULT_THREAD_NUM
 	
   engine = brute.Engine:new( Driver, host, port, { uservar = uservar, passvar = passvar } )
   engine:setMaxThreads(thread_num)
+  engine.options.script_name = SCRIPT_NAME
   status, result = engine:start()
 		
   return result
