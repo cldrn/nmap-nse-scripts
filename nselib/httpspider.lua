@@ -16,7 +16,7 @@ local http = require "http";
 local string = require "string";
 module(... or "httpspider",package.seeall)
 
---Library Settings
+--Settings
 local OPT_ALLOW_REMOTE = stdnse.get_script_args("httpspider.allowRemote") or false
 local OPT_CACHE_CONTENT = stdnse.get_script_args("httpspider.cacheContent") or false
 local OPT_SUBCRAWLERS_NUM = stdnse.get_script_args("httpspider.subcrawlers") or 3
@@ -28,6 +28,49 @@ local HTTPSPIDER_TBVL = {} --TBVL = To Be Visited List
 local HTTPSPIDER_VL = {}  --VL = Visited List
 local TBVL_MUTEX = nmap.object(HTTPSPIDER_TBVL)
 local VL_MUTEX = nmap.object(HTTPSPIDER_VL)
+
+--=============================================
+--Queue implementation
+--=============================================
+--The following methods implement a FIFO queue
+Queue = {}
+
+--Initializes a new queue
+--@return Index table
+function Queue.new ()
+  return {head = 0, tail = -1}
+end
+
+--Adds element to the queue
+--Inserts are FIFO
+--@param queue Queue
+--@param value Value of new element
+function Queue.add (queue, value)
+  local last = queue.tail + 1
+  queue.tail = last
+  queue[last] = value
+end
+
+--Removes element from queue
+--Deletions are FIFO
+--@param queue Queue
+--@return True if operation was succesfull
+--@return Error string
+function Queue.remove (queue)
+  local first = queue.head
+  if first > queue.tail then
+    return false, "Queue is empty"
+  end
+  local value = queue[first]
+  queue[first] = nil       
+  queue.head = first + 1
+  return true, value
+end
+
+
+--=========================================
+---Crawler implementation
+--=========================================
 
 --Adds uri to the Visited List page table stored in the registry
 --URIs in the list have already been crawled.
@@ -58,12 +101,22 @@ end
 --@param list_type TBVL or VL
 --@return URI string
 local function get_next_uri(list_type)
+  local next_uri
   if list_type == "TBVL" then
     TBVL_MUTEX "lock"
-      return nmap.registry["httpspider"][SAVE_MODE][""]
+      for _, uri in pairs(nmap.registry["httpspider"]["tbvl"]) do
+        if uri then
+          next_uri = nmap.registry["httpspider"]["tbvl"][uri]
+          nmap.registry["httpspider"]["tbvl"][uri] = nil
+
+          return next_uri
+        end
+      end
     TBVL_MUTEX "done"
   else if list_type == "VL" then
-
+    VL_MUTEX "lock"
+      return nmap.registry["httpspider"][]
+    VL_MUTEX "done"
   end
 end
 
