@@ -193,15 +193,47 @@ local function is_url_absolute(url)
         end
 end
 
+--Checks if given string is a relative url
+--@param url URL String
+--@return True if url is a relative url
+local function is_url_relative(url)
+  if is_url_absolute(url) then
+    return false
+  end
+  return true
+end
+
+--Returns the url including the script name without parameters.
+--@param uri URL String
+--@return URL without parameters
+local function remove_query(uri)
+  local url_frags, abs_url
+  url_frags = url.parse(uri)
+  if url_frags.scheme and url_frags.authority and url_frags.path then
+    abs_url = url_frags.scheme.."://"..url_frags.authority..url_frags.path
+  else
+    abs_url = uri
+  end
+  return abs_url
+end
+
 --Returns base URL
 --@return Base URL of address
 local function get_base_url(url)
 end
 
---Parses the href attribute of the <a> tags inside the given string
---@return list of href links
+--Parses the href attribute of the <a> tags inside the body
+--@param body HTML Body
+--@return Table of href links found in document
 local function get_href_links(body)
-        local href_links
+  local href_links = {}
+
+  body = string.lower(body)
+  for l in string.gfind(body, 'href%s*=%s*[\'"](%s*[^"^\']+%s*)[\'"]') do
+    table.insert(href_links, l)
+  end
+
+  return href_links
 end
 
 --Downloads a page and processes its information
