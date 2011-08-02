@@ -17,17 +17,12 @@ local string = require "string";
 module(... or "httpspider",package.seeall)
 
 --Settings
+local HTTPSPIDER_DATAKEY = "httpspider.data"
 local OPT_ALLOW_REMOTE = stdnse.get_script_args("httpspider.allowRemote") or false
 local OPT_CACHE_CONTENT = stdnse.get_script_args("httpspider.cacheContent") or false
 local OPT_SUBCRAWLERS_NUM = stdnse.get_script_args("httpspider.subcrawlers") or 3
 local OPT_CRAWLER_DEPTH = stdnse.get_script_args("httpspider.depth") or 5
 local OPT_PATH_BLACKLIST = stdnse.get_script_args("httpspider.pathBlacklist") or false
-
---Mutexes
-local HTTPSPIDER_TBVL = {} --TBVL = To Be Visited List
-local HTTPSPIDER_VL = {}  --VL = Visited List
-local TBVL_MUTEX = nmap.object(HTTPSPIDER_TBVL)
-local VL_MUTEX = nmap.object(HTTPSPIDER_VL)
 
 --=============================================
 --Queue implementation
@@ -67,6 +62,13 @@ function Queue.remove (queue)
   return true, value
 end
 
+--=========================================
+--Mutexes
+--=========================================
+local HTTPSPIDER_TBVL = Queue.new() --TBVL = To Be Visited List
+local HTTPSPIDER_VL = Queue.new()  --VL = Visited List
+local TBVL_MUTEX 
+local VL_MUTEX
 
 --=========================================
 ---Crawler implementation
@@ -77,6 +79,7 @@ end
 --@param uri URI
 local function vl_add(uri)
   VL_MUTEX "lock"
+    Queue.add(HTTPSPIDER_VL, uri)
   if nmap.registry["httpspider.data"]["vl"][uri] == nil then
     nmap.registry["httpspider.data"]["vl"][uri] = true
   end
@@ -123,15 +126,17 @@ end
 --Crawls given URL until it find all local links
 --@return Table of crawled pages and its information
 local function crawl(uri, options)
-
+  init_registry()
 end
 
 --Inits registry tables holding the tbvl and vl lists
 --@see httspider.data
-local function init_library_registry()
-  if nmap.registry["httpspider.data"] then
-    nmap.registry["httpspider.data"]["tbvl"] = {}
-    nmap.registry["httpspider.data"]["vl"] = {}
+local function init_registry()
+  if nmap.registry[HTTPSPIDER_DATAKEY]["tbvl"] == nil or nmap.registry[HTTPSPIDER_DATAKEY]["vl"] == nil then
+    nmap.registry[HTTPSPIDER_DATAKEY]["tbvl"] = Queue.new()
+    nmap.registry[HTTPSPIDER_DATAKEY]["vl"] = Queue.new()
+    TBVL_MUTEX = nmap.object(nmap.registry[HTTPSPIDER_DATAKEY]["tbvl"])
+    VL_MUTEX = nmap.object(nmap.registry[HTTPSPIDER_DATAKEY]["vl"])
   end
 end
 
@@ -217,9 +222,72 @@ local function remove_query(uri)
   return abs_url
 end
 
+---Checks if link is malformed
+--
+--This function looks for:
+--*Links that are too long
+--*Links containing html code
+--*Links with mailto tags
+--
+--@param url URL String
+--@return True if link seems malformed
+local function is_link_malformed(url)
+  --check for links that are too long
+  if string.len(url)>100 then
+    return true
+  end
+  --check if brackets are found (indicating html code in link)
+  if string.find(url, "[<>]") ~= nil then
+    return true
+  end
+  --check for mailto tag
+  if string.find(url, "mailto:") ~= nil then
+    return true
+  end
+  --check if its a javascript action
+  if string.find(url, "javascript:") ~= nil then
+    return true
+  end
+  return false
+end
+
+--Checks if link is local.
+--@param url_parts
+--@param host
+--@return True if link is local
+local function is_link_local(url_parts, host)
+  if url_parts.authority and
+    not(url_parts.authority == stdnse.get_hostname(host) or
+        url_parts.authority == "www."..stdnse.get_hostname(host)) then
+    return false
+  end
+
+  return true
+end
+
 --Returns base URL
 --@return Base URL of address
 local function get_base_url(url)
+end
+
+--Extracts file extension from URL
+--@param uri URL String
+--@return URL Extension
+local function get_url_extension(uri)
+  local page_ext, ext_offset, url_frags
+
+  -- Parse file extension if available
+  url_frags=url.parse(uri)
+  if url_frags ~= nil then
+    ext_offset = string.find(url_frags.path, "%.(.*)")
+    if ext_offset ~= nil then
+      page_ext = string.sub(url_frags.path, ext_offset)
+    else
+      page_ext = ""
+    end
+  end
+ 
+  return page_ext
 end
 
 --Parses the href attribute of the <a> tags inside the body
@@ -264,3 +332,4 @@ end
 local function get_javascript_files()
 
 end
+
