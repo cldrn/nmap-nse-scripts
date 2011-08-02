@@ -215,9 +215,9 @@ end
 ---
 action = function(host, port)
   local fingerprintload_status, fingerprints, requests, results
-  local fingerprint_filename = nmap.registry.args["http-default-accounts.fingerprintfile"] or "http-defaul-accounts-fingerprints.lua"
-  local category = nmap.registry.args["http-default-accounts.category"] or false
-  local basepath = nmap.registry.args["http-default-accounts.basepath"] or "/"
+  local fingerprint_filename = stdnse.get_script_args("http-default-accounts.fingerprintfile") or "http-defaul-accounts-fingerprints.lua"
+  local category = stdnse.get_script_args("http-default-accounts.category") or false
+  local basepath = stdnse.get_script_args("http-default-accounts.basepath") or "/"
   local output_lns = {}
 
   --Load fingerprint data or abort 
@@ -253,13 +253,11 @@ action = function(host, port)
 
   -- Iterate through responses to find a candidate for login routine
   local j = 1
-  
   for i, fingerprint in ipairs(fingerprints) do
-    local credentials_found = false
     stdnse.print_debug(1, "%s: Processing %s", SCRIPT_NAME, fingerprint.name)
     for _, probe in ipairs(fingerprint.paths) do
 
-      if (results[j] and not(credentials_found)) then
+      if (results[j]) then
         local path = basepath .. probe['path']
 
         if( http.page_exists(results[j], result_404, known_404, path, true) ) then
@@ -274,7 +272,6 @@ action = function(host, port)
                                           fingerprint.name, login_combo["username"], login_combo["password"], path)
               -- Add to http credentials table
               register_http_credentials(host, port, login_combo["username"], login_combo["password"])
-              credentials_found = true
             end
           end
         end
