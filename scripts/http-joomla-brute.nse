@@ -1,7 +1,9 @@
 description = [[
 Performs a brute force password attack against Joomla installations.
 
-This script initially reads the session cookie and parses the security token to perfom the brute force password auditing.
+This script initially reads the session cookie and parses the security token to perfom the brute force password auditing. 
+It uses the unpwdb and brute libraries to perform password guessing. Any successful guesses are stored using the 
+credentials library.
 
 Joomla's default uri and form names:
 * Default uri:<code>/administrator/index.php</code>
@@ -11,13 +13,10 @@ Joomla's default uri and form names:
 
 ---
 -- @usage
--- nmap -p80 --script http-joomla-brute 
+-- nmap -sV --script http-joomla-brute 
 --   --script-args 'userdb=users.txt,passdb=passwds.txt,http-joomla-brute.hostname=domain.com,
---                  http-joomla-brute.threads=3,brute.firstonly=true' <ip/domain>
---
--- This script uses the unpwdb and brute libraries to perform password
--- guessing. Any successful guesses are stored in the nmap registry, under
--- the <code>nmap.registry.credentials.http</code> key for other scripts to use.
+--                  http-joomla-brute.threads=3,brute.firstonly=true' <target>
+-- nmap -sV --script http-joomla-brute <target>
 --
 -- @output
 -- PORT     STATE SERVICE REASON

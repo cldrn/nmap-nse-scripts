@@ -80,9 +80,6 @@ local VL_MUTEX
 local function vl_add(uri)
   VL_MUTEX "lock"
     Queue.add(HTTPSPIDER_VL, uri)
-  if nmap.registry["httpspider.data"]["vl"][uri] == nil then
-    nmap.registry["httpspider.data"]["vl"][uri] = true
-  end
   VL_MUTEX "done"
 end
 
@@ -90,9 +87,7 @@ end
 --@param uri URI
 local function tbvl_add(uri)
   TBVL_MUTEX "lock"
-  if nmap.registry["httspider.data"]["tbvl"][uri] == nil then
-    nmap.registry["httpspider.data"]["tbvl"][uri] = true
-  end 
+    Queue.add(HTTPSPIDER_TBVL, uri)
   TBVL_MUTEX "done"
   return true
 end

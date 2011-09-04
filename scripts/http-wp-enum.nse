@@ -1,5 +1,6 @@
 description = [[
-http-wp-enum enumerates usernames in Wordpress installations by exploiting an information disclosure vulnerability existing in versions 2.6, 3.1, 3.1.1, 3.1.3 and 3.2-beta2 and possibly others.
+http-wp-enum enumerates usernames in Wordpress installations by exploiting an information disclosure vulnerability 
+existing in versions 2.6, 3.1, 3.1.1, 3.1.3 and 3.2-beta2 and possibly others.
 
 Original advisory:
 * http://www.talsoft.com.ar/index.php/research/security-advisories/wordpress-user-id-and-user-name-disclosure
@@ -7,7 +8,8 @@ Original advisory:
 
 ---
 -- @usage
--- nmap -p80 --script http-wp-enum <host>
+-- nmap -p80 --script http-wp-enum <target>
+-- nmap -sV --script http-wp-enum --script-args limit=50 <target>
 --
 -- @output
 -- PORT   STATE SERVICE REASON
@@ -19,15 +21,16 @@ Original advisory:
 -- | Username found: lean
 -- | Username found: alex
 -- | Username found: ricardo
+-- |_Search stopped at ID #25. Increase the upper limit if necessary with 'http-wp-enum.limit'
 -- 
 -- @args http-wp-enum.limit Upper limit for ID search. Default: 25
--- @args http-wp-enum.basepath Base path to Wordpress
--- @args http-wp-enum.out Output filename
+-- @args http-wp-enum.basepath Base path to Wordpress. Default: /
+-- @args http-wp-enum.out If set it saves the username list in this file.
 ---
 
 author = "Paulino Calderon"
 license = "Same as Nmap--See http://nmap.org/book/man-legal.html"
-categories = {"discovery", "auth", "safe", "vuln"}
+categories = {"discovery", "auth", "intrusive", "vuln"}
 
 require "shortport"
 require "http"
@@ -95,14 +98,14 @@ end
 ---
 action = function(host, port)
   local basepath = stdnse.get_script_args("http-wp-enum.basepath") or "/"
-  local limit = stdnse.get_script_args(SCRIPT_NAME..".limit") or 25
+  local limit = stdnse.get_script_args("http-wp-enum.limit") or 25
   local filewrite = stdnse.get_script_args("http-wp-enum.out")
   local output = {""}
   local users = {}
   --First, we check this is WP
   if not(check_wp(host, port, basepath)) then
     if nmap.verbosity() >= 2 then
-      return "[Error] Wordpress installation was not found. We couldn't find wp_login.php"
+      return "[Error] Wordpress installation was not found. We couldn't find wp-login.php"
     else
       return
     end
@@ -128,6 +131,7 @@ action = function(host, port)
   end
  
   if #output > 1 then
+    output[#output+1] = string.format("Search stopped at ID #%s. Increase the upper limit if necessary with 'http-wp-enum.limit'", limit)
     return stdnse.strjoin("\n", output)
   end
 end
