@@ -1,40 +1,45 @@
 ---
 -- HTTP Spidering Library
--- This library implements a HTTP spider or web crawler. The information found by crawling a web server is useful to a 
+-- This library implements a HTTP spider or web crawler. The information found by crawling a web server is useful to a
 -- variety of NSE HTTP scripts that perform tasks ranging from information gathering to web vulnerability exploitation.
 --
 -- The crawler will quit after certain amount of time depending on the timing template level:
 -- *-T3 or less - 10 minutes
 -- *-T4 - 5 minutes
 -- *-T5 - 3 minutes
--- The timing template level is ignored if the argument <code>httpspider.timeLimit</code>
+-- The timing template level is ignored if the argument <code>httpspider.timeLimit</code> is set. If <code>httpspider.timeLimit</code>
+-- is set to 0, the spider will not exit until its done crawling the site.
 --
 -- Using this library:
--- To crawl a web server : httpspider.crawl(host, port, uri)
--- Afterwards, to retrieve a list of absolute URIs: httpspider.get_sitemap()
+-- To crawl a web server : <code>httpspider.crawl(host, port, uri)</code>
+-- Afterwards, to retrieve a list of the absolute URIs found: <code>httpspider.get_sitemap()</code>
+-- To see more example of usage, take a look at http-sitemap and http-phpselfxss.
 --
--- 
---Supported options/arguments:
---*allowRemote - If set it allows the crawler to visit remote sites. 
---*subcrawlerNum - Sets the number of subcrawlers to start when crawling
---*pathBlacklist - Table of paths that are not allowed to be visited. Note that paths shouldnt start or end with "/" Ie. 
+-- OPTIONS:
+--*<code>allowRemote</code> - If set it allows the crawler to visit remote sites.
+--*<code>subcrawlerNum</code> - Sets the number of subcrawlers to start when crawling
+--*<code>pathBlacklist</code> - Table of paths that are not allowed to be visited. Note that paths shouldnt start or end with "/" Ie.
 --                          --script-args httpspider.pathBlacklist={"examples", "documentation/examples"}
---*ignoreParams - Removes query parameters before visiting a page
---*showBinaries - If set it shows binaries that were found 
---*uriBlacklist - Table of URIs that are not allowed to be crawled. The library uses absolute uris internally so you must provide the URIs in absolute form as well.
---*timeLimit - Time limit before quitting
---*statsLimit - Time interval when debug stats are shown
+--*<code>ignoreParams</code> - Removes query parameters before visiting a page
+--*<code>showBinaries</code> - If set it shows binaries that were found
+--*<code>uriBlacklist</code> - Table of URIs that are not allowed to be crawled. The library uses absolute uris internally so you must provide the URIs in absolute form as well.
+--*<code>timeLimit</code> - Time limit before quitting
+--*<code>statsLimit</code> - Time interval when debug stats are shown
+--*<code>cookies</code> - Cookie string to be appended with every request.
+--
+-- More documentation can be found at: https://secwiki.org/w/Nmap/Spidering_Library
 --
 -- @args httpspider.allowRemoteURI Turn on to allow spider to crawl outside the parent website to remote sites. Default value: false
 -- @args httpspider.cachePageContent Turn on to write cache files containing all the crawled page's content. Default value: true
 -- @args httpspider.subcrawlerNum Sets the number of subcrawlers to use. Default: 3
 -- @args httpspider.pathBlacklist Table of paths that are blacklisted. Default: nil
--- @args httpspider.ignoreParams If set, it removes the query parameters from URIs and process them without arguments. Useful when crawling forums or similar software 
+-- @args httpspider.ignoreParams If set, it removes the query parameters from URIs and process them without arguments. Useful when crawling forums or similar software
 --                                                        that has a lot of links pointing to the same script but changing a numeric ID. Default: false
 -- @args httpspider.showBinaries Shows binaries in the list of visited URIs. Otherwise binaries are not shown because they were not parsed by the crawler. Default: false
 -- @args httpspider.uriBlacklist Table of absolute URIs that are blacklisted. Default: nil
--- @args httpspider.timeLimit Time limit before killing the crawler. Default: According to T
--- @args httpspider.statsLimit Time limit before reporting stats in debug mode. Default: 10
+-- @args httpspider.timeLimit Time limit before killing the crawler. Default: According to Nmap's timing template. Use 0 for unlimited time.
+-- @args httpspider.statsInterval Time limit before reporting stats in debug mode. Default: 10
+-- @args httpspider.cookies Cookie string to be appended with every request. Default: nil
 --
 -- @author Paulino Calderon
 -- @copyright Same as Nmap--See http://nmap.org/book/man-legal.html
@@ -47,7 +52,7 @@ local string = require "string";
 local url = require "url";
 module(... or "httpspider", package.seeall)
 
---Settings for web crawling: 
+--Settings for web crawler:
 local LIB_NAME = "httpspider"
 local OPT_ALLOW_REMOTE = stdnse.get_script_args(LIB_NAME..".allowRemote") or false
 local OPT_CACHE_CONTENT = stdnse.get_script_args(LIB_NAME..".cacheContent") or true
@@ -57,18 +62,17 @@ local OPT_IGNORE_PARAMS = stdnse.get_script_args(LIB_NAME..".ignoreParams") or f
 local OPT_SHOW_BINARIES = stdnse.get_script_args(LIB_NAME..".showBinaries") or false
 local OPT_URI_BLACKLIST = stdnse.get_script_args(LIB_NAME..".uriBlacklist") or false
 local OPT_TIMELIMIT = stdnse.get_script_args(LIB_NAME..".timeLimit") or false
-local OPT_STATS_INTERVAL = stdnse.get_script_args(LIB_NAME..".statsLimit") or 10
-
+local OPT_STATS_INTERVAL = stdnse.get_script_args(LIB_NAME..".statsInterval") or 10
+local OPT_COOKIES = stdnse.get_script_args(LIB_NAME..".cookies") or nil
 --Error msgs used by the URI filter
 local URI_FILTER_MSG_MALFORMED = "URI seems malformed."
 local URI_FILTER_MSG_REMOTE = "URI is remote and AllowRemoteURI is disabled."
 local URI_FILTER_MSG_BLACKLISTED = "URI is blacklisted."
-local URI_FILTER_MSG_PATHBLACKLISTED = "Path is blacklisted" 
+local URI_FILTER_MSG_PATHBLACKLISTED = "Path is blacklisted"
 local URI_FILTER_MSG_BINARY = "URI is a binary file."
 
 --Global Objects
-local UNVISITED_QUEUE 
-
+local UNVISITED_QUEUE
 local UNVISITED_LIST = {}
 local BINARY_LIST = {}
 local CRAWLER_BASEPATH = nil
@@ -78,7 +82,6 @@ local TIMEOUT_LIMIT = nil
 local VISITED_COUNTER = 0
 local VISITED_CACHE_COUNTER = 0
 local TOTAL_URI_COUNTER = 0
-
 --===============================================================
 --Queue implementation
 --===============================================================
@@ -130,7 +133,7 @@ end
 --Crawler implementation starts here
 --===============================================================
 
---Returns true if the page has been visited 
+--Returns true if the page has been visited
 --@param uri URI to check
 --@return True if page has been visited already
 local function is_visited(uri)
@@ -147,7 +150,7 @@ local function add_visited_uri(uri, page_obj)
   stdnse.print_debug(3, "%s: Trying to add URI '%s' to the visited registry", LIB_NAME, uri)
   if nmap.registry[LIB_NAME]["visited"][uri] == nil then
     nmap.registry[LIB_NAME]["visited"][uri] = page_obj
-    VISITED_COUNTER = VISITED_COUNTER + 1 
+    VISITED_COUNTER = VISITED_COUNTER + 1
     stdnse.print_debug(3, "%s: URI '%s' was added to the visited registry succesfully", LIB_NAME, uri)
     return
   end
@@ -156,7 +159,7 @@ local function add_visited_uri(uri, page_obj)
 end
 
 --Adds URI to a list of URIs to be crawled stored in the registry
---We use a local list to check if item is already in queue to obtain constant time. 
+--We use a local list to check if item is already in queue to obtain constant time.
 --@param uri URI
 local function add_unvisited_uri(uri)
   if UNVISITED_LIST[uri] == nil then
@@ -177,7 +180,7 @@ local function add_unvisited_uris(uris)
   end
 end
 
---Adds URI of a binary file to the binary list 
+--Adds URI of a binary file to the binary list
 --@param uri URI
 local function add_binary_uri(uri)
   if BINARY_LIST[uri] == nil then
@@ -185,7 +188,7 @@ local function add_binary_uri(uri)
   end
 end
 
---Returns true if crawling is done 
+--Returns true if crawling is done
  --@return true if queue of pages to visit is empty
 local function is_crawling_done()
   local ret = queue_is_empty(UNVISITED_QUEUE)
@@ -247,11 +250,11 @@ local function format_uri ( host, port, basepath_uri, uri )
     uri = url.absolute(basepath_uri, uri)
     stdnse.print_debug(3, "%s: URI after formatting:%s", LIB_NAME, uri)
   end
-  
+
   if OPT_IGNORE_PARAMS then
     uri = remove_query(uri)
   end
-  
+
   return uri
 end
 
@@ -332,11 +335,11 @@ end
 --@param ext Url extension
 --@return True if the url contains a invalid extension
 local function is_ext_blacklisted(ext)
-  local banned_extensions = {".jpg",".png",".gif", ".jpeg", ".sh", 
+  local banned_extensions = {".exe", ".bat", ".com", ".jpg",".png",".gif", ".jpeg", ".sh",
                                                 ".pdf",".doc",".docx",".ppt",".css",
                                                 ".js", ".rar", ".zip",".tar.gz", ".swf",
                                                 ".txt", ".mp3", ".au3", ".flv"}
-  
+
   if ext then
     ext = string.lower(ext)
   end
@@ -388,11 +391,11 @@ local function uri_filter(host, uri)
   if is_uri_blacklisted(uri) then
     return false, URI_FILTER_MSG_BLACKLISTED
   end
-  
+
   if is_path_blacklisted(host, uri) then
     return false, URI_FILTER_MSG_PATHBLACKLISTED
   end
-  
+
   local ext = get_uri_extension(uri)
   if is_ext_blacklisted(ext) then
     return false, URI_FILTER_MSG_BINARY
@@ -401,62 +404,64 @@ local function uri_filter(host, uri)
   return true
 end
 
---Downloads a page and processes its information
---@return Table containing all the page information
-local function download_uri(host, port, url)
-  local page_resp = http.get(host, port, url)
-  local page_obj = {["uri"]=url, ["status"]=page_resp.status, 
-    ["type"]=page_resp.header["content-type"], ["content"]=page_resp.body}
-
-  return page_obj
-end
-
 ---Extracts URIs from given document and returns table
 -- if the given URI passes the filter rules
 -- @param uri URI
 -- @param settings Options table
 -- @param False is uri is not valid, otherwise a table containing the uris extracted
--- 
+--
 local function url_extract(host, port, uri)
   stdnse.print_debug(2, "%s:Extracting links from:%s", LIB_NAME, uri)
   local uricheck_b, uricheck_msg = uri_filter(host, uri)
   TOTAL_URI_COUNTER = TOTAL_URI_COUNTER + 1
-  
+
   if not (uricheck_b) then
     stdnse.print_debug(3, "%s: URI '%s' did not pass the filter:%s", LIB_NAME, uri, uricheck_msg)
     if (uricheck_msg == URI_FILTER_MSG_BINARY ) and OPT_SHOW_BINARIES then
       add_binary_uri(uri)
     end
-      
+
     return false
   end
 
   local formatted_links = {}
-  local page_obj = download_uri(host, port, uri)
-  add_visited_uri(uri, page_obj)
-  
-  local links = get_href_links(page_obj.content)
-  local src_links = get_src_links(page_obj.content)
-  local form_links = get_form_links(page_obj.content)
-  
+  local options = nil
+  if OPT_COOKIES then
+    options = {["cookies"]=string.format("%s", OPT_COOKIES)}
+  end
+  local page_obj = http.get(host, port, uri, options)
+  if page_obj.status and ( page_obj.status > 300 and page_obj.status < 400 ) then
+    if page_obj.header.location then
+      formatted_links[#formatted_links+1] = format_uri(host, port, uri, page_obj.header.location)
+    end
+    return formatted_links
+  end
+
+  local page_obj_db = {["uri"]=uri, ["status"]=page_obj.status, ["type"]=page_obj.header["content-type"]}
+  add_visited_uri(uri, page_obj_db)
+
+  local links = get_href_links(page_obj.body)
+  local src_links = get_src_links(page_obj.body)
+  local form_links = get_form_links(page_obj.body)
+
   for i, href_link in pairs(links) do
     stdnse.print_debug(3, "%s:URI '%s' extracted from '%s'", LIB_NAME, href_link, uri)
     href_link = format_uri(host, port, uri, href_link)
     formatted_links[#formatted_links+1] = href_link
   end
-  
+
   for i, src_link in pairs(src_links) do
     stdnse.print_debug(3, "%s:URI '%s' extracted from '%s'", LIB_NAME, src_link, uri)
     src_link = format_uri(host, port, uri, src_link)
     formatted_links[#formatted_links+1] = src_link
   end
-  
+
   for i, action_link in pairs(form_links) do
     stdnse.print_debug(3, "%s:URI '%s' extracted from '%s'", LIB_NAME, action_link, uri)
     action_link = format_uri(host, port, uri, action_link)
     formatted_links[#formatted_links+1] = action_link
   end
-  
+
   return formatted_links
 end
 
@@ -487,7 +492,6 @@ end
 function get_href_links(body)
   local href_links = {}
 
-  body = string.lower(body)
   for l in string.gfind(body, 'href%s*=%s*[\'"](%s*[^"^\']+%s*)[\'"]') do
     table.insert(href_links, l)
   end
@@ -498,10 +502,9 @@ end
 --Parses the src attribute of the <script> tags inside the document's body
 --@param body HTML body
 --@return Table of JS links found
-function get_src_links(body) 
+function get_src_links(body)
   local src_links = {}
 
-  body = string.lower(body)
   for l in string.gfind(body, 'src%s*=%s*[\'"](%s*[^"^\']+%s*)[\'"]') do
     table.insert(src_links, l)
   end
@@ -512,10 +515,9 @@ end
 --Parses the action attribute of the <form> tags inside the document's body
 --@param body HTML body
 --@return Table of links found
-function get_form_links(body) 
+function get_form_links(body)
   local src_links = {}
 
-  body = string.lower(body)
   for l in string.gfind(body, 'action%s*=%s*[\'"](%s*[^"^\']+%s*)[\'"]') do
     table.insert(src_links, l)
   end
@@ -524,17 +526,19 @@ function get_form_links(body)
 end
 
 --Initializes registry keys to hold the visited list
---It uses the key [LIB_NAME]["visited"] to store a list of pages that have 
+--It uses the key [LIB_NAME]["visited"] to store a list of pages that have
 --been parsed already.
 local function init_registry()
   nmap.registry[LIB_NAME] = {}
   nmap.registry[LIB_NAME]["visited"] = {}
+  nmap.registry[LIB_NAME]["finished"] = false
+  nmap.registry[LIB_NAME]["running"] = true
 end
 
 --Reports stats of the web crawlers.
 --It shows:
 --*Visited URIs - Number of URIs that have been visited
---*Total extracted URIs - Total number of URIs found 
+--*Total extracted URIs - Total number of URIs found
 --*Cache hits - Number of URIs that were going to be visited but they were found in the registry
 local function report_stats()
   local time_diff = ( os.time() - START_TIME )
@@ -549,12 +553,8 @@ end
 --@return Time limit before quitting crawling
 local function get_timeout_limit()
   local timing_lvl = nmap.timing_level()
-  local interval 
-  
-  if OPT_TIMELIMIT then
-    interval = OPT_TIMELIMIT
-  end
-  
+  local interval
+
   if timing_lvl <= 3 then
     interval = 600
   elseif timing_lvl ==4 then
@@ -562,7 +562,11 @@ local function get_timeout_limit()
   elseif timing_lvl >= 5 then
     interval = 180
   end
-  
+
+  if OPT_TIMELIMIT then
+      interval = OPT_TIMELIMIT
+  end
+
   stdnse.print_debug(3, "%s:Crawler will quit after %s seconds", LIB_NAME, interval)
   return interval
 end
@@ -571,20 +575,22 @@ end
 --If it has, it exits
 local function has_crawler_timedout()
   local timediff = ( os.time() - START_TIMEOUT )
-  if ( timediff > tonumber(TIMEOUT_LIMIT) ) then
+  if ( TIMEOUT_LIMIT ~= 0 and timediff > tonumber(TIMEOUT_LIMIT) ) then
     return true
   end
   return false
 end
 
 --
---Initializes a subcrawler task
---A subcrawler will fetch an URI from the queue and extract new URLs to add them to the queue
---
+--Initializes a subcrawler
+--A subcrawler will fetch an URI from the queue and extract new URIs, filter and add them to the queue.
+--The thread will quit if the allowed running time has been exceeded.
+--@param Host table
+--@param Port table
 local function init_subcrawler(host, port)
-  stdnse.print_debug(2, "%s:STARTING SUBCRAWLER", LIB_NAME)
+  stdnse.print_debug(3, "%s:STARTING SUBCRAWLER", LIB_NAME)
   local condvar = nmap.condvar(host)
-  
+
   repeat
     --exit if crawler has timed out
     if has_crawler_timedout() then
@@ -602,10 +608,9 @@ local function init_subcrawler(host, port)
         add_unvisited_uris(new_uris)
       end
     end
-  --end
   until is_crawling_done()
 
-  stdnse.print_debug(2,"%s:SUBCRAWLER EXITING...", LIB_NAME)
+  stdnse.print_debug(3,"%s:SUBCRAWLER EXITING...", LIB_NAME)
   return true
 end
 
@@ -634,9 +639,10 @@ function get_sitemap()
   return uris
 end
 
---Initializes web crawling using the given settings.
---This funcion extracts the initial set of links and 
---create the subcrawlers.
+--Initializes the web crawler.
+--This funcion extracts the initial set of links and
+--creates the subcrawlers that start processing these links.
+--It waits until all the subcrawlers are done before quitting.
 --@param uri URI string
 --@param settings Options table
 local function init_crawler(host, port, uri)
@@ -651,7 +657,7 @@ local function init_crawler(host, port, uri)
   if not( is_url_absolute(uri) ) then
     local abs_uri = url.absolute("http://"..stdnse.get_hostname(host), uri)
     stdnse.print_debug(3, "%s:Starting URI '%s' became '%s'", LIB_NAME, uri, abs_uri)
-    uri = abs_uri 
+    uri = abs_uri
   end
 
   --Extracts links from given url
@@ -659,12 +665,14 @@ local function init_crawler(host, port, uri)
 
   if #urls<=0 then
     stdnse.print_debug(3, "%s:0 links found in %s", LIB_NAME, uri)
+    nmap.registry[LIB_NAME]["finished"] = true
     return false
   end
 
   add_unvisited_uris(urls)
 
-  --Reduce the number of subcrawlers if initials link list is less than the number of subcrawlers
+  --Reduce the number of subcrawlers if the initial link list has less
+  -- items than the number of subcrawlers
   if tonumber(crawlers_num) > #urls then
     crawlers_num = #urls
   end
@@ -681,20 +689,37 @@ local function init_crawler(host, port, uri)
       if coroutine.status(thread) == "dead" then co[i] = nil end
     end
   until next(co) == nil;
-  
+
   dump_visited_uris()
+  nmap.registry[LIB_NAME]["finished"] = true
+  nmap.registry[LIB_NAME]["running"] = false
 
 end
 
---Crawls given URL until it find all pages in the webserver
---@return Table of crawled pages and its information
+--Crawls given URL until it follows all discovered URIs
+--Several options can alter the behavior of the crawler, please
+--take a look at the documentation closely.
+--@param host Host table
+--@param port Port table
+--@param uri URI to crawl
 function crawl(host, port, uri)
-  stdnse.print_debug(1, "%s: Crawling URI:%s", LIB_NAME, uri)
-  START_TIME = os.time()
-  START_TIMEOUT = START_TIME
-  CRAWLER_BASEPATH = uri 
-  TIMEOUT_LIMIT = get_timeout_limit()
-  UNVISITED_QUEUE = queue_new()
-  init_crawler(host, port, uri)
-end
+  if uri then
+    if not(nmap.registry[LIB_NAME]) then
+      stdnse.print_debug(1, "%s:Starting web crawler. URI:%s", LIB_NAME, uri)
+      UNVISITED_QUEUE = queue_new()
 
+      START_TIME = os.time()
+      START_TIMEOUT = START_TIME
+      CRAWLER_BASEPATH = uri
+      TIMEOUT_LIMIT = get_timeout_limit()
+
+      init_crawler(host, port, uri)
+    else 
+      stdnse.print_debug(1, "%s:Registry entry exists! (A crawler has been initiated)", LIB_NAME)
+      while not(nmap.registry[LIB_NAME]["finished"]) do
+        stdnse.print_debug(1, "%s:Another web crawler is running. Going to sleep now!", LIB_NAME)
+        stdnse.sleep(3)
+      end
+    end
+  end
+end
