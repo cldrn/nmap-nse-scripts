@@ -16,7 +16,7 @@ Exploits a directory traversal vulnerability existing in several TP-Link wireles
 
 author = "Paulino Calderon"
 license = "Same as Nmap--See http://nmap.org/book/man-legal.html"
-categories = {"intrusive", "vuln", "exploit"}
+categories = {"vuln", "exploit"}
 
 local http = require "http"
 local io = require "io"
@@ -91,7 +91,7 @@ This vulnerability can be exploited without authentication and gives attackers a
       if response.body:match("Error") then
         stdnse.print_debug(1, "%s:[Error] File not found:%s", SCRIPT_NAME, rfile)
         vuln.extra_info = string.format("%s not found.\n", rfile)
-        return
+        return vuln_report:make_output(vuln)
       end
       local  _, _, rfile_content = string.find(response.body, 'SCRIPT>(.*)')
       vuln.extra_info = rfile.." :\n"..rfile_content
@@ -104,6 +104,6 @@ This vulnerability can be exploited without authentication and gives attackers a
         end
       end
     end
-    return vuln_report:make_output(vuln)
   end
+  return vuln_report:make_output(vuln)
 end
