@@ -7,9 +7,9 @@ any help confirming the vulnerability in other models.
 Advisory:
 * http://websec.ca/advisories/view/path-traversal-vulnerability-tplink-wdr740
 
-Interesting files:
-*
-* 
+Other interesting files:
+* /tmp/topology.cnf (Wireless configuration)
+* /tmp/ath0.ap_bss (Wireless encryption key)
 ]]
 
 ---
