@@ -1,7 +1,7 @@
 description = [[
 Exploits a directory traversal vulnerability existing in several TP-Link wireless routers. Attackers may exploit this vulnerability to read any of the configuration and password files.
 
-This vulnerability was confirmed in models WR740N and WR740ND but there are several models that use the same HTTP server so I believe they could be vulnerable as well. I appreciate 
+This vulnerability was confirmed in models WR740N, WR740ND and WR2543ND but there are several models that use the same HTTP server so I believe they could be vulnerable as well. I appreciate 
 any help confirming the vulnerability in other models.
 
 Advisory:
@@ -28,8 +28,8 @@ Other interesting files:
 -- |     Description:
 -- |       Some TP-Link wireless routers are vulnerable to a path traversal vulnerability that allows attackers to read configurations or any other file in the device.
 -- |       This vulnerability can be exploited without authenticatication.
--- |       Confirmed vulnerable models: WR740N, WR740ND
--- |       Possibly vulnerable (Based on the same firmware): WR743ND,WR842ND,WA-901ND,WR941N,WR941ND,WR1043ND,WR2543ND,MR3220,MR3020,WR841N.
+-- |       Confirmed vulnerable models: WR740N, WR740ND, WR2543ND
+-- |       Possibly vulnerable (Based on the same firmware): WR743ND,WR842ND,WA-901ND,WR941N,WR941ND,WR1043ND,MR3220,MR3020,WR841N.
 -- |     Disclosure date: 2012-06-18
 -- |     Extra information:
 -- |       /etc/shadow :
@@ -105,7 +105,7 @@ end
 -- MAIN - The script checks for vulnerable devices by attempting to read "etc/shadow" and finding the pattern "root:".
 ---
 action = function(host, port)
-  local response, rfile, rpath, uri, evil_uri, rfile_content, filewrite
+  local response, rfile, rfile_content, filewrite
   local output_lines = {}
 
   filewrite = stdnse.get_script_args(SCRIPT_NAME..".outfile")
@@ -117,8 +117,8 @@ action = function(host, port)
        description = [[
 Some TP-Link wireless routers are vulnerable to a path traversal vulnerability that allows attackers to read configurations or any other file in the device.
 This vulnerability can be exploited without authenticatication.
-Confirmed vulnerable models: WR740N, WR740ND
-Possibly vulnerable (Based on the same firmware): WR743ND,WR842ND,WA-901ND,WR941N,WR941ND,WR1043ND,WR2543ND,MR3220,MR3020,WR841N.]],
+Confirmed vulnerable models: WR740N, WR740ND, WR2543ND
+Possibly vulnerable (Based on the same firmware): WR743ND,WR842ND,WA-901ND,WR941N,WR941ND,WR1043ND,MR3220,MR3020,WR841N.]],
        references = {
            'http://websec.ca/advisories/view/path-traversal-vulnerability-tplink-wdr740'
        },
