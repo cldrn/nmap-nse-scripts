@@ -4,7 +4,7 @@
 -- Because HTTP has so many uses, there are a number of interfaces to this library.
 -- The most obvious and common ones are simply <code>get</code>, <code>post</code>,
 -- and <code>head</code>; or, if more control is required, <code>generic_request</code>
--- can be used. Thse functions do what one would expect. The <code>get_url</code> 
+-- can be used. These functions do what one would expect. The <code>get_url</code> 
 -- helper function can be used to parse and retrieve a full URL. 
 --
 -- These functions return a table of values, including:
@@ -12,12 +12,12 @@
 -- * <code>header</code> - An associative array representing the header. Keys are all lowercase, and standard headers, such as 'date', 'content-length', etc. will typically be present. 
 -- * <code>rawheader</code> - A numbered array of the headers, exactly as the server sent them. While header['content-type'] might be 'text/html', rawheader[3] might be 'Content-type: text/html'.
 -- * <code>cookies</code> - A numbered array of the cookies the server sent. Each cookie is a table with the following keys: <code>name</code>, <code>value</code>, <code>path</code>, <code>domain</code>, and <code>expires</code>. 
--- * <code>body</code> - The full body, as retunred by the server. 
+-- * <code>body</code> - The full body, as returned by the server. 
 --
--- If a script is planning on making a lot of requests, the pipeling functions can
+-- If a script is planning on making a lot of requests, the pipelining functions can
 -- be helpful. <code>pipeline_add</code> queues requests in a table, and
 -- <code>pipeline</code> performs the requests, returning the results as an array,
--- with the respones in the same order as the queries were added. As a simple example:
+-- with the responses in the same order as the queries were added. As a simple example:
 --<code>
 --	-- Start by defining the 'all' variable as nil
 --	local all = nil
@@ -39,7 +39,7 @@
 -- a page exists. The <code>identify_404</code> function will try several URLs on the 
 -- server to determine what the server's 404 pages look like. It will attempt to identify
 -- customized 404 pages that may not return the actual status code 404. If successful, 
--- the function <code>page_exists</code> can then be used to determine whether no not
+-- the function <code>page_exists</code> can then be used to determine whether or not
 -- a page existed. 
 --
 -- Some other miscellaneous functions that can come in handy are <code>response_contains</code>,
@@ -69,8 +69,20 @@
 -- * <code>bypass_cache</code>: Do not perform a lookup in the local HTTP cache.
 -- * <code>no_cache</code>: Do not save the result of this request to the local HTTP cache.
 -- * <code>no_cache_body</code>: Do not save the body of the response to the local HTTP cache.
+-- * <code>redirect_ok</code>: Closure that overrides the default redirect_ok used to validate whether to follow HTTP redirects or not. False, if no HTTP redirects should be followed.
+--   The following example shows how to write a custom closure that follows 5 consecutive redirects:
+--   <code>
+--   redirect_ok = function(host,port)
+--     local c = 5
+--     return function(url)
+--       if ( c==0 ) then return false end
+--       c = c - 1
+--       return true
+--     end
+--   end
+--   </code>
 --  
--- @args http-max-cache-size The maximum memory size (in bytes) of the cache.
+-- @args http.max-cache-size The maximum memory size (in bytes) of the cache.
 --
 -- @args http.useragent The value of the User-Agent header field sent with
 -- requests. By default it is
@@ -86,21 +98,24 @@
 -- Implement cache system for http pipelines
 --
 
-local coroutine = require "coroutine";
-local table = require "table";
 
-local base64 = require "base64";
-local nmap = require "nmap";
-local url = require "url";
-local stdnse = require "stdnse";
-local comm = require "comm";
-
-module(... or "http",package.seeall)
+local base64 = require "base64"
+local comm = require "comm"
+local coroutine = require "coroutine"
+local nmap = require "nmap"
+local openssl = require "openssl"
+local os = require "os"
+local stdnse = require "stdnse"
+local string = require "string"
+local table = require "table"
+local url = require "url"
+_ENV = stdnse.module("http", stdnse.seeall)
 
 ---Use ssl if we have it
 local have_ssl = (nmap.have_ssl() and pcall(require, "openssl"))
 
 local USER_AGENT = stdnse.get_script_args('http.useragent') or "Mozilla/5.0 (compatible; Nmap Scripting Engine; http://nmap.org/book/nse.html)"
+local MAX_REDIRECT_COUNT = 5
 
 -- Recursively copy a table.
 -- Only recurs when a value is a table, other values are copied by assignment.
@@ -159,7 +174,7 @@ end
 -- @return the token.
 local function get_token(s, offset)
   -- All characters except CTL and separators.
-  local _, i, token = s:find("^([^()<>@,;:\\\"/%[%]?={} %z\001-\031\127]+)", offset)
+  local _, i, token = s:find("^([^()<>@,;:\\\"/%[%]?={} \0\001-\031\127]+)", offset)
   if i then
     return i + 1, token
   else
@@ -203,7 +218,7 @@ local function get_quoted_string(s, offset, crlf)
       -- depending on whether it's in a header field or not. This function does
       -- not allow CRLF.
       c = s:sub(i, i)
-      if c ~= "\t" and c:match("^[%z\001-\031\127]$") then
+      if c ~= "\t" and c:match("^[\0\001-\031\127]$") then
         error(string.format("Unexpected control character in quoted-string: 0x%02X.", c:byte(1)))
       end
     end
@@ -315,6 +330,11 @@ local function validate_options(options)
     elseif(key == 'bypass_cache' or key == 'no_cache' or key == 'no_cache_body') then
       if(type(value) ~= 'boolean') then
         stdnse.print_debug(1, "http: options.bypass_cache, options.no_cache, and options.no_cache_body must be boolean values")
+        bad = true
+      end
+    elseif(key == 'redirect_ok') then
+      if(type(value)~= 'function' and type(value)~='boolean') then
+        stdnse.print_debug(1, "http: options.redirect_ok must be a function or boolean")
         bad = true
       end
     else
@@ -493,7 +513,9 @@ local function recv_chunked(s, partial)
 
     line, partial = recv_line(s, partial)
     if not line then
-      return nil, string.format("Didn't find CRLF after chunk-data.")
+	  -- this warning message was initially an error but was adapted
+	  -- to support broken servers, such as the Citrix XML Service
+      stdnse.print_debug(2, "Didn't find CRLF after chunk-data.")
     elseif not string.match(line, "^\r?\n") then
       return nil, string.format("Didn't find CRLF after chunk-data; got %q.", line)
     end
@@ -726,12 +748,21 @@ local function parse_set_cookie(s)
         if string.sub(s, pos, pos) == "\"" then
           pos, value = get_quoted_string(s, pos)
         else
-          if string.lower(name) == "expires" then
+          -- account for the possibility of the expires attribute being empty or improperly formatted
+          local last_pos = pos
+ 
+         if string.lower(name) == "expires" then
             -- For version 0 cookies we must allow one comma for "expires".
             _, pos, value = string.find(s, "([^,]*,[^;,]*)[ \t]*", pos)
           else
             _, pos, value = string.find(s, "([^;,]*)[ \t]*", pos)
           end
+
+          -- account for the possibility of the expires attribute being empty or improperly formatted
+          if ( not(pos) ) then
+            _, pos, value = s:find("([^;]*)", last_pos)
+          end
+
           pos = pos + 1
         end
         if not value then
@@ -835,7 +866,7 @@ local function getPipelineMax(response)
   if response then
     if response.header and response.header.connection ~= "close" then
       if response.header["keep-alive"] then
-        local max = string.match( response.header["keep-alive"], "max\=(%d*)")
+        local max = string.match( response.header["keep-alive"], "max=(%d*)")
         if(max == nil) then
           return 40
         end
@@ -1111,7 +1142,7 @@ local function request(host, port, data, options)
     return nil
   end
   local method
-  local header, partial
+  local header
   local response
 
   options = options or {}
@@ -1124,11 +1155,10 @@ local function request(host, port, data, options)
   end
 
   local error_response = {status=nil,["status-line"]=nil,header={},body=""}
-  local socket
 
   method = string.match(data, "^(%S+)")
 
-  socket, partial = comm.tryssl(host, port, data, { timeout = options.timeout })
+  local socket, partial, opts = comm.tryssl(host, port, data, { timeout = options.timeout })
 
   if not socket then
     return error_response
@@ -1145,6 +1175,9 @@ local function request(host, port, data, options)
   until not (response.status >= 100 and response.status <= 199)
 
   socket:close()
+
+  -- if SSL was used to retrieve the URL mark this in the response
+  response.ssl = ( opts == 'ssl' )
 
   return response
 end
@@ -1171,10 +1204,182 @@ function generic_request(host, port, method, path, options)
   return request(host, port, build_request(host, port, method, path, options), options)
 end
 
+---Uploads a file using the PUT method and returns a result table. This is a simple wrapper
+-- around <code>generic_request</code>
+--
+-- @param host The host to connect to.
+-- @param port The port to connect to.
+-- @param path The path to retrieve.
+-- @param options [optional] A table that lets the caller control socket timeouts, HTTP headers, and other parameters. For full documentation, see the module documentation (above). 
+-- @param putdata The contents of the file to upload
+-- @return <code>nil</code> if an error occurs; otherwise, a table as described in the module documentation. 
+-- @see http.generic_request
+function put(host, port, path, options, putdata)
+  if(not(validate_options(options))) then
+    return nil
+  end
+  if ( not(putdata) ) then
+	return nil
+  end
+  local mod_options = {
+    content = putdata,
+  }
+  table_augment(mod_options, options or {})
+  return generic_request(host, port, "PUT", path, mod_options)
+end
+
+-- Check if the given URL is okay to redirect to. Return a table with keys
+-- "host", "port", and "path" if okay, nil otherwise.
+-- @param url table as returned by url.parse
+-- @param host table as received by the action function
+-- @param port table as received by the action function
+-- @return loc table containing the new location
+function redirect_ok(host, port)
+
+  -- A battery of tests a URL is subjected to in order to decide if it may be
+  -- redirected to. They incrementally fill in loc.host, loc.port, and loc.path.
+  local rules = {
+
+	-- Check if there's any credentials in the url
+    function (url, host, port)
+      -- bail if userinfo is present
+      return ( url.userinfo and false ) or true
+    end,
+
+    -- Check if the location is within the domain or host
+    function (url, host, port)
+      local hostname = stdnse.get_hostname(host)
+      if ( hostname == host.ip and host.ip == url.host.ip ) then
+        return true
+      end
+      local domain = hostname:match("^[^%.]-%.(.*)") or hostname
+      local match = ("^.*%s$"):format(domain)
+      if ( url.host:match(match) ) then
+        return true
+      end
+      return false
+    end,
+
+    -- Check whether the new location has the same port number
+    function (url, host, port)
+      -- port fixup, adds default ports 80 and 443 in case no url.port was
+      -- defined, we do this based on the url scheme
+      local url_port = url.port
+      if ( not(url_port) ) then
+        if ( url.scheme == "http" ) then
+          url_port = 80
+        elseif( url.scheme == "https" ) then
+          url_port = 443
+        end
+      end
+      if (not url_port) or tonumber(url_port) == port.number then
+        return true
+      end
+      return false
+    end,
+
+    -- Check whether the url.scheme matches the port.service
+    function (url, host, port)
+      -- if url.scheme is present then it must match the scanned port
+      if url.scheme and url.port then return true end
+      if url.scheme and url.scheme ~= port.service then return false end
+      return true
+    end,
+
+    -- make sure we're actually being redirected somewhere and not to the same url
+    function (url, host, port)
+      -- path cannot be unchanged unless host has changed
+      -- loc.path must be set if returning true
+      if ( not url.path or url.path == "/" ) and url.host == ( host.targetname or host.ip) then return false end
+      if not url.path then return true end
+      return true
+    end,
+  }
+
+  local counter = MAX_REDIRECT_COUNT
+  -- convert a numeric port to a table
+  if ( "number" == type(port) ) then
+    port = { number = port }
+  end
+  return function(url)
+    if ( counter == 0 ) then return false end
+    counter = counter - 1
+    for i, rule in ipairs( rules ) do
+	  if ( not(rule( url, host, port )) ) then
+        --stdnse.print_debug("Rule failed: %d", i)
+        return false
+      end
+    end
+    return true
+  end
+end
+
+-- Handles a HTTP redirect
+-- @param host table as received by the script action function
+-- @param port table as received by the script action function
+-- @param path string
+-- @param response table as returned by http.get or http.head
+-- @return url table as returned by <code>url.parse</code> or nil if there's no
+--         redirect taking place
+local function parse_redirect(host, port, path, response)
+  if ( not(tostring(response.status):match("^30[127]$")) or 
+       not(response.header) or
+       not(response.header.location) ) then
+    return nil
+  end
+  port = ( "number" == type(port) ) and { number = port } or port
+  local u = url.parse(response.header.location)
+  if ( not(u.host) and not(u.scheme) ) then
+    -- we're dealing with a relative url
+    u.host, u.port = stdnse.get_hostname(host), port.number
+    u.path = ((u.path:sub(1,1) == "/" and "" ) or "/" ) .. u.path -- ensuring leading slash
+  end
+  if ( not(u.path) ) then
+    u.path = "/"
+  end
+  if ( u.query ) then
+    u.path = ("%s?%s"):format( u.path, u.query )
+  end
+  -- do port fixup
+  if ( not(u.port) ) then
+    if ( u.scheme == "http" ) then u.port = 80 end
+    if ( u.scheme == "https") then u.port = 443 end
+  end
+  return u
+end
+
+-- Retrieves the correct function to use to validate HTTP redirects
+-- @param host table as received by the action function
+-- @param port table as received by the action function
+-- @param options table as passed to http.get or http.head
+-- @return redirect_ok function used to validate HTTP redirects
+local function get_redirect_ok(host, port, options)
+  if ( options ) then
+    if ( options.redirect_ok == false ) then
+      return function() return false end
+    elseif( "function" == type(options.redirect_ok) ) then
+	  return options.redirect_ok(host, port)
+	else
+      return redirect_ok(host, port)
+    end
+  else
+    return redirect_ok(host, port)
+  end
+end
+
 ---Fetches a resource with a GET request and returns the result as a table. This is a simple
--- wraper around <code>generic_request</code>, with the added benefit of having local caching. 
--- This caching can be controlled in the <code>options</code> array, see module documentation 
--- for more information. 
+-- wraper around <code>generic_request</code>, with the added benefit of having local caching
+-- and support for HTTP redirects. Redirects are followed only if they pass all the
+-- validation rules of the redirect_ok function. This function may be overrided by supplying
+-- a custom function in the <code>redirect_ok</code> field of the options array. The default
+-- function redirects the request if the destination is:
+-- * Within the same host or domain
+-- * Has the same port number
+-- * Stays within the current scheme
+-- * Does not exceed <code>MAX_REDIRECT_COUNT</code> count of redirects
+-- 
+-- Caching and redirects can be controlled in the <code>options</code> array, see module
+-- documentation for more information. 
 --
 -- @param host The host to connect to.
 -- @param port The port to connect to.
@@ -1186,11 +1391,23 @@ function get(host, port, path, options)
   if(not(validate_options(options))) then
     return nil
   end
-  local response, state = lookup_cache("GET", host, port, path, options);
-  if response == nil then
-    response = generic_request(host, port, "GET", path, options)
-    insert_cache(state, response);
-  end
+  local redir_check = get_redirect_ok(host, port, options)
+  local response, state, location
+  local u = { host = host, port = port, path = path }
+  repeat
+    response, state = lookup_cache("GET", u.host, u.port, u.path, options);
+    if ( response == nil ) then
+      response = generic_request(u.host, u.port, "GET", u.path, options)
+      insert_cache(state, response);
+    end
+    u = parse_redirect(host, port, path, response)
+    if ( not(u) ) then
+      break
+    end
+    location = location or {}
+    table.insert(location, response.header.location)
+  until( not(redir_check(u)) )
+  response.location = location
   return response
 end
 
@@ -1228,7 +1445,19 @@ function get_url( u, options )
 end
 
 ---Fetches a resource with a HEAD request. Like <code>get</code>, this is a simple
--- wrapper around <code>generic_request</code> with response caching. 
+-- wrapper around <code>generic_request</code> with response caching. This function
+-- also has support for HTTP redirects. Redirects are followed only if they pass
+-- all the validation rules of the redirect_ok function. This function may be
+-- overrided by supplying a custom function in the <code>redirect_ok</code> field
+-- of the options array. The default function redirects the request if the
+-- destination is:
+-- * Within the same host or domain
+-- * Has the same port number
+-- * Stays within the current scheme
+-- * Does not exceed <code>MAX_REDIRECT_COUNT</code> count of redirects
+-- 
+-- Caching and redirects can be controlled in the <code>options</code> array,
+-- see module documentation for more information.
 --
 -- @param host The host to connect to.
 -- @param port The port to connect to.
@@ -1240,12 +1469,24 @@ function head(host, port, path, options)
   if(not(validate_options(options))) then
     return nil
   end
-  local response, state = lookup_cache("HEAD", host, port, path, options);
-  if response == nil then
-    response = generic_request(host, port, "HEAD", path, options)
-    insert_cache(state, response);
-  end
-  return response;
+  local redir_check = get_redirect_ok(host, port, options)
+  local response, state, location
+  local u = { host = host, port = port, path = path }
+  repeat
+    response, state = lookup_cache("HEAD", host, port, path, options);
+    if response == nil then
+      response = generic_request(host, port, "HEAD", path, options)
+      insert_cache(state, response);
+    end
+    u = parse_redirect(host, port, path, response)
+    if ( not(u) ) then
+      break
+    end
+    location = location or {}
+    table.insert(location, response.header.location)
+  until( not(redir_check(u)) )
+  response.location = location
+  return response
 end
 
 ---Fetches a resource with a POST request. Like <code>get</code>, this is a simple
@@ -1447,7 +1688,7 @@ local function read_token(s, pos)
 
   pos = skip_space(s, pos)
   -- 1*<any CHAR except CTLs or separators>. CHAR is only byte values 0-127.
-  _, pos, token = string.find(s, "^([^%z\001-\031()<>@,;:\\\"/?={} \t%[%]\127-\255]+)", pos)
+  _, pos, token = string.find(s, "^([^\0\001-\031()<>@,;:\\\"/?={} \t%[%]\127-\255]+)", pos)
 
   if token then
     return pos + 1, token
@@ -1496,6 +1737,89 @@ local function read_token_or_quoted_string(s, pos)
   else
     return read_token(s, pos)
   end
+end
+
+---
+-- Finds forms in html code
+-- returns table of found forms, in plaintext.
+-- @param body A <code>response.body</code> in which to search for forms
+-- @return A list of forms.
+function grab_forms(body)
+  local forms = {}
+  local form_start_expr = '<%s*[Ff][Oo][Rr][Mm]'
+  local form_end_expr = '</%s*[Ff][Oo][Rr][Mm]>'
+  
+  local form_opening = string.find(body, form_start_expr)
+  local forms = {}
+  
+  while form_opening do
+    local form_closing = string.find(body, form_end_expr, form_opening+1)
+    if form_closing == nil then --html code contains errors
+      break
+    end
+    forms[#forms+1] = string.sub(body, form_opening, form_closing-1)
+    if form_closing+1 <= #body then
+      form_opening = string.find(body, form_start_expr, form_closing+1)
+    else
+      break
+    end
+  end
+  return forms
+end
+
+---
+-- Parses a form, that is, finds its action and fields.
+-- @param form A plaintext representation of form
+-- @return A dictionary with keys: <code>action</action>,
+-- <code>method</code> if one is specified, <code>fields</code>
+-- which is a list of fields found in the form each of which has a
+-- <code>name</code> attribute and <code>type</code> if specified.
+function parse_form(form)
+  local parsed = {}
+  local fields = {}
+  local form_action = string.match(form, '[Aa][Cc][Tt][Ii][Oo][Nn]="(.-)"')
+  if form_action then
+    parsed["action"] = form_action
+  else
+    return nil
+  end
+  
+  -- determine if the form is using get or post
+  local form_method = string.match(form, '[Mm][Ee][Tt][Hh][Oo][Dd]="(.-)"')
+  if form_method then
+    parsed["method"] = string.lower(form_method)
+  end
+
+  -- now identify the fields
+  local input_type
+  local input_name
+
+  -- first find regular inputs
+  for f in string.gmatch(form, '<%s*[Ii][Nn][Pp][Uu][Tt].->') do
+    input_type = string.match(f, '[Tt][Yy][Pp][Ee]="(.-)"')
+    input_name = string.match(f, '[Nn][Aa][Mm][Ee]="(.-)"')
+    local next_field_index = #fields+1
+    if input_name then
+      fields[next_field_index] = {}
+      fields[next_field_index]["name"] = input_name
+      if input_type then
+        fields[next_field_index]["type"] = string.lower(input_type)
+      end
+    end
+  end
+
+  -- now search for textareas
+  for f in string.gmatch(form, '<%s*[Tt][Ee][Xx][Tt][Aa][Rr][Ee][Aa].->') do
+    input_name = string.match(f, '[Nn][Aa][Mm][Ee]="(.-)"')
+    local next_field_index = #fields+1
+    if input_name then
+      fields[next_field_index] = {}
+      fields[next_field_index]["name"] = string.lower(input_name)
+      fields[next_field_index]["type"] = "textarea"
+    end
+  end
+  parsed["fields"] = fields
+  return parsed
 end
 
 local MONTH_MAP = {
@@ -1579,7 +1903,8 @@ local function read_auth_challenge(s, pos)
     tmp_pos = pos
     tmp_pos, name = read_token(s, tmp_pos)
     if not name then
-      return nil
+      pos = skip_space(s, pos + 1)
+      return pos, { scheme = scheme, params = nil }
     end
     tmp_pos = skip_space(s, tmp_pos)
     if string.sub(s, tmp_pos, tmp_pos) ~= "=" then
@@ -1692,7 +2017,7 @@ function can_use_head(host, port, result_404, path)
   end
 
   -- Perform a HEAD request and see what happens.
-  local data = http.head( host, port, path )
+  local data = head( host, port, path )
   if data then
     if data.status and data.status == 302 and data.header and data.header.location then
       stdnse.print_debug(1, "HTTP: Warning: Host returned 302 and not 200 when performing HEAD.")
@@ -1802,7 +2127,7 @@ function identify_404(host, port)
   local URL_404_2 = '/NmapUpperCheck' .. os.time(os.date('*t'))
   local URL_404_3 = '/Nmap/folder/check' .. os.time(os.date('*t'))
 
-  data = http.get(host, port, URL_404_1)
+  data = get(host, port, URL_404_1)
 
   if(data == nil) then
     stdnse.print_debug(1, "HTTP: Failed while testing for 404 status code")
@@ -1820,17 +2145,19 @@ function identify_404(host, port)
     -- Clean up the body (for example, remove the URI). This makes it easier to validate later
     if(data.body) then
       -- Obtain a couple more 404 pages to test different conditions
-      local data2 = http.get(host, port, URL_404_2)
-      local data3 = http.get(host, port, URL_404_3)
+      local data2 = get(host, port, URL_404_2)
+      local data3 = get(host, port, URL_404_3)
       if(data2 == nil or data3 == nil) then
         stdnse.print_debug(1, "HTTP: Failed while testing for extra 404 error messages")
         return false, "Failed while testing for extra 404 error messages"
       end
 
-      -- Check if the return code became something other than 200
+      -- Check if the return code became something other than 200.
+      -- Status code: -1 represents unknown.
+      -- If the status is nil or the string "unknown" we switch to -1. 
       if(data2.status ~= 200) then
-        if(data2.status == nil) then
-          data2.status = "<unknown>"
+        if(type(data2.status) ~= "number") then
+          data2.status = -1
         end
         stdnse.print_debug(1, "HTTP: HTTP 404 status changed for second request (became %d).", data2.status)
         return false, string.format("HTTP 404 status changed for second request (became %d).", data2.status)
@@ -1838,8 +2165,8 @@ function identify_404(host, port)
 
       -- Check if the return code became something other than 200
       if(data3.status ~= 200) then
-        if(data3.status == nil) then
-          data3.status = "<unknown>"
+        if(type(data3.status) ~= "number") then
+          data3.status = -1
         end
         stdnse.print_debug(1, "HTTP: HTTP 404 status changed for third request (became %d).", data3.status)
         return false, string.format("HTTP 404 status changed for third request (became %d).", data3.status)
@@ -2055,7 +2382,7 @@ function parse_url(url)
       result['querystring'] = {}
       local values = stdnse.strsplit('&', result['raw_querystring'])
       for i, v in ipairs(values) do
-        local name, value = unpack(stdnse.strsplit('=', v))
+        local name, value = table.unpack(stdnse.strsplit('=', v))
         result['querystring'][name] = value
       end
     end
@@ -2179,3 +2506,5 @@ local function get_default_timeout( nmap_timing )
   return timeout
 end
 
+
+return _ENV;
