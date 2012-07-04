@@ -61,7 +61,7 @@ action = function(host, port)
 
         local _, http_status, _ = http.identify_404( host.ip,port)
         if ( http_status == 200 ) then
-          stdnse.print_debug(1, "%s:HTTP server always return status 200. Exiting to avoid false positives")
+          stdnse.print_debug(1, "%s:HTTP server always return status 200. Exiting to avoid false positives", SCRIPT_NAME)
           return false
         end
 
