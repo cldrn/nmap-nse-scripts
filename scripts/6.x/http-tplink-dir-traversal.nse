@@ -1,5 +1,5 @@
 description = [[
-Exploits a directory traversal vulnerability existing in several TP-Link wireless routers. Attackers may exploit this vulnerability to read any of the configuration and password files.
+Exploits a directory traversal vulnerability existing in several TP-Link wireless routers. Attackers may exploit this vulnerability to read any of the configuration and password files remotely and without authentication.
 
 This vulnerability was confirmed in models WR740N, WR740ND and WR2543ND but there are several models that use the same HTTP server so I believe they could be vulnerable as well. I appreciate 
 any help confirming the vulnerability in other models.
@@ -15,7 +15,7 @@ Other interesting files:
 ---
 -- @usage nmap -p80 --script http-tplink-dir-traversal.nse <target>
 -- @usage nmap -p80 -Pn -n --script http-tplink-dir-traversal.nse <target>
--- @usage nmap -p80 --script http-tplink-dir-traversal.nse --script-args rfile=/etc/topology.conf -d -n -Pn
+-- @usage nmap -p80 --script http-tplink-dir-traversal.nse --script-args rfile=/etc/topology.conf -d -n -Pn <target>
 
 -- 
 -- @output
