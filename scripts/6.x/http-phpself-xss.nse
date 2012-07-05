@@ -1,9 +1,9 @@
 description=[[
-Crawls a web server looking for PHP files that use the variable $_SERVER["PHP_SELF"] unsafely. 
+Crawls a web server and attempts to find PHP files vulnerable to reflected cross site scripting via the variable $_SERVER["PHP_SELF"]. 
 
 This script crawls the webserver to create a list of PHP files and then sends an attack vector/probe to identify PHP_SELF cross site scripting vulnerabilities.
 PHP_SELF XSS refers to reflected cross site scripting vulnerabilities caused by the lack of sanitation of the variable <code>$_SERVER["PHP_SELF"]</code> in PHP scripts. This variable is
-commonly used in php scripts with forms and when the current URI is needed.
+commonly used in php scripts that display forms and when the script file name  is needed.
 
 Examples of Cross Site Scripting vulnerabilities in the variable $_SERVER[PHP_SELF]:
 *http://www.securityfocus.com/bid/37351
@@ -41,7 +41,7 @@ The attack vector/probe used is: <code>/'"/><script>alert(1)</script></code>
 -- @args http-phpself-xss.timeout Spidering timeout. Default:10000
 author = "Paulino Calderon"
 license = "Same as Nmap--See http://nmap.org/book/man-legal.html"
-categories = {"discovery", "intrusive", "vuln"}
+categories = {"fuzzer", "intrusive", "vuln"}
 
 local http = require 'http'
 local httpspider = require 'httpspider'
@@ -54,6 +54,7 @@ portrule = shortport.http
 
 -- PHP_SELF Attack vector
 local PHP_SELF_PROBE = '/%27%22/%3E%3Cscript%3Ealert(1)%3C/script%3E'
+local probes = {}
 
 --Checks if attack vector is in the response's body
 --@param response Response table
@@ -74,8 +75,18 @@ end
 local function launch_probe(host, port, uri)
   local probe_response
 
-  stdnse.print_debug(1, "HTTP GET %s%s", uri, PHP_SELF_PROBE)
+  --We avoid repeating probes. 
+  --This is a temp fix since httpspider do not keep track of previously parsed links at the moment.
+  if probes[uri] then
+    return false
+  end
+
+  stdnse.print_debug(1, "%s:HTTP GET %s%s", SCRIPT_NAME, uri, PHP_SELF_PROBE)
   probe_response = http.get(host, port, uri .. PHP_SELF_PROBE)
+
+  --save probe in list to avoid repeating it
+  probes[uri] = true
+
   if check_probe_response(probe_response) then
     return true
   end
@@ -105,6 +116,8 @@ PHP files are not handling safely the variable $_SERVER["PHP_SELF"] causing Refl
   local vuln_report = vulns.Report:new(SCRIPT_NAME, host, port)
 
   local vulnpages = {}
+  local probed_pages= {}
+
   while(true) do
     local status, r = crawler:crawl()
     if ( not(status) ) then
@@ -116,8 +129,9 @@ PHP files are not handling safely the variable $_SERVER["PHP_SELF"] causing Refl
     end
   
     local parsed = url.parse(tostring(r.url))
+
     --Only work with .php files
-    if ( parsed.path:match(".*.php") ) then
+    if ( parsed.path and parsed.path:match(".*.php") ) then
         --The following port/scheme code was seen in http-backup-finder and its neat =)
         local host, port = parsed.host, parsed.port
         if ( not(port) ) then
@@ -135,8 +149,9 @@ PHP files are not handling safely the variable $_SERVER["PHP_SELF"] causing Refl
     vuln.state = vulns.STATE.EXPLOIT
     vulnpages.name = "Vulnerable files with proof of concept:"
     vuln.extra_info = stdnse.format_output(true, vulnpages)..crawler:getLimitations()
-    return vuln_report:make_output(vuln)
-
   end
+
+  return vuln_report:make_output(vuln)
+
 end
 
