@@ -15,7 +15,7 @@ portrule = shortport.http
 action = function(host, port)
   local uri = "/anony/mjpg.cgi"
 
-  local _, status_404, _ = http.identify_404(host, port)
+  local _, status_404, resp_404 = http.identify_404(host, port)
   if status_404 == 200 then
     stdnse.print_debug(1, "%s: Web server returns ambigious response. Exiting.", SCRIPT_NAME)
     return
@@ -23,7 +23,7 @@ action = function(host, port)
 
   stdnse.print_debug(1, "%s: HTTP HEAD %s", SCRIPT_NAME, uri)
   local resp = http.head(host, port, uri)
-  if resp.status and http.page_exists(resp, resp_404, nil, uri) then
+  if resp.status and http.page_exists(resp, resp_404, nil, uri) and resp.status == 200 then
     return string.format("Trendnet webcam video feed:http://%s/anony/mjpg.cgi", host.ip)
   end
 end
