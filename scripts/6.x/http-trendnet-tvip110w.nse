@@ -8,7 +8,9 @@ Original advisory: http://console-cowboys.blogspot.com/2012/01/trendnet-cameras-
 -- @usage nmap -p80 --script http-trendnet-tvip110w.nse <target>
 -- 
 -- @output
---
+-- PORT   STATE SERVICE REASON
+-- 80/tcp open  http    syn-ack
+-- |_http-trendnet-webcams: Trendnet TV-IP110W video feed is unprotected:http://<target>/anony/mjpg.cgi
 ---
 
 
