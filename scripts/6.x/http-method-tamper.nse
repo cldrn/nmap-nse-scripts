@@ -43,8 +43,13 @@ local function probe_http_verbs(host, port, uri)
   if head_req and head_req.status ~= 401 then
     return true
   end 
+  local post_req = http.post(host, port, uri)
+  if post_req and post_req.status ~= 401 then
+    return true
+  end 
+ 
   local random_verb_req = http.generic_request(host, port, stdnse.generate_random_string(4), uri)
-  if random_verb_req and random_verb_req.status ~= 401 then
+  if random_verb_req and random_verb_req.status ~= 401 and random_verb_req.status ~= 501 then
     return true
   end 
   
@@ -52,6 +57,7 @@ local function probe_http_verbs(host, port, uri)
 end
 
 action = function(host, port)
+  local vuln_uris = {}
   local paths = stdnse.get_script_args(SCRIPT_NAME..".paths")
   local uri = stdnse.get_script_args(SCRIPT_NAME..".uri") or "/"
   local timeout = stdnse.get_script_args(SCRIPT_NAME..".timeout") or 10000
@@ -69,13 +75,6 @@ Some password protected resources are vulnerable to authentication bypass by HTT
      }
   local vuln_report = vulns.Report:new(SCRIPT_NAME, host, port)
 
-  -- Identify servers that answer 200 to invalid HTTP requests and exit as these would invalidate the tests
-  local _, http_status, _ = http.identify_404(host,port)
-  if ( http_status == 200 ) then
-    stdnse.print_debug(1, "%s: Exiting due to ambiguous response from web server on %s:%s. All URIs return status 200.", SCRIPT_NAME, host.ip, port.number)
-    return false
-  end
-    
   -- If paths is not set, crawl the web server looking for http 401 status
   if not(paths) then
     local crawler = httpspider.Crawler:new(host, port, uri, { scriptname = SCRIPT_NAME } )
@@ -93,8 +92,9 @@ Some password protected resources are vulnerable to authentication bypass by HTT
       if r.response.status == 401 then
         stdnse.print_debug(2, "%s:%s is protected! Let's try some verb tampering...", SCRIPT_NAME, tostring(r.url))
         local parsed = url.parse(tostring(r.url))
-        if probe_http_verbs(host, port, uri) then
-          vuln.state = vulns.STATE.VULNERABLE
+        if probe_http_verbs(host, port, parsed.path) then
+          stdnse.print_debug(1, "%s:Vulnerable URI %s", SCRIPT_NAME, uri)
+          table.insert(vuln_uris, parsed.path)
         end
       end
     end
@@ -102,20 +102,28 @@ Some password protected resources are vulnerable to authentication bypass by HTT
   -- Paths were set, check them and exit. No crawling here.
 
     -- convert single string entry to table
-    if ( "string" == type(paths) ) then
+    if ( type(paths) == "string" ) then
       paths = { paths }
     end
-	
+    
     for _, path in ipairs(paths) do
-      local getstatus = http.get(host, port, path).status
+      local path_req = http.get(host, port, path)
 
-      if getstatus == 401 then
+      if path_req.status == 401 then
          if probe_http_verbs(host, port, path) then
-          vuln.state = vulns.STATE.VULNERABLE 
+          stdnse.print_debug(1, "%s:Vulnerable URI %s", SCRIPT_NAME, path)
+          table.insert(vuln_uris, path)
          end
       end
     
     end
   end
+
+  if ( #vuln_uris > 0 ) then
+    vuln.state = vulns.STATE.EXPLOIT
+    vuln_uris.name = "URIs suspected to be vulnerable to HTTP verb tampering:"
+    vuln.extra_info = stdnse.format_output(true, vuln_uris)
+  end
+
   return vuln_report:make_output(vuln)
 end
