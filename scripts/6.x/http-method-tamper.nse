@@ -1,7 +1,14 @@
 description = [[
-Crawls a web server looking for password protected resources (HTTP status 401) and attempts to bypass the authentication and access them using HTTP verb tampering.
+Crawls a web server looking for password protected resources (HTTP 401 status) and attempts to bypass 
+the authentication by performing HTTP verb tampering.
 
-The script determines if the protected URI is vulnerable by performing HTTP verb tampering and monitoring the status codes. First, it uses a HEAD request and then a random generated string ( This is useful as some web servers treat unknown request methods as GET ).
+The script determines if the protected URI is vulnerable by performing HTTP verb tampering and monitoring
+ the status codes. First, it uses a HEAD request, then a POST request and finally a random generated string 
+( This last one is useful when web servers treat unknown request methods as a GET request).
+
+If the table <code>paths</code> is set, it will attempt to access the given URIs. Otherwise, a web crawler 
+is initiated to try to find protected resources. Keep in mind that is more likely to find a resource 
+vulnerable to HTTP verb tampering when accessing a file.
 
 References:
 * http://www.imperva.com/resources/glossary/http_verb_tampering.html
@@ -11,10 +18,35 @@ References:
 ]]
 
 ---
--- @usage
--- nmap --script=http-method-tamper --script-args 'http-method-tamper.paths={/path1/,/path2/}' <target>
+-- @usage nmap -sV --script http-method-tamper <target>
+-- @usage nmap -p80 --script http-method-tamper --script-args 'http-method-tamper.paths={/protected/db.php,/protected/index.php}' <target>
 --
+-- @output
+-- PORT   STATE SERVICE REASON
+-- 80/tcp open  http    syn-ack
+-- | http-method-tamper: 
+-- |   VULNERABLE:
+-- |   Authentication bypass by HTTP verb tampering
+-- |     State: VULNERABLE (Exploitable)
+-- |     Description:
+-- |       This web server contains password protected resources vulnerable to authentication bypass 
+-- |       vulnerabilities via HTTP verb tampering. This is often found in web servers that only limit access to the
+-- |        common HTTP methods and in misconfigured .htaccess files.
+-- |              
+-- |     Extra information:
+-- |       
+-- |   URIs suspected to be vulnerable to HTTP verb tampering:
+-- |     /method-tamper/protected/pass.txt [POST]
+-- |   
+-- |     References:
+-- |       http://www.imperva.com/resources/glossary/http_verb_tampering.html
+-- |       http://www.mkit.com.ar/labs/htexploit/
+-- |       http://capec.mitre.org/data/definitions/274.html
+-- |_      https://www.owasp.org/index.php/Testing_for_HTTP_Methods_and_XST_%28OWASP-CM-008%29
+--
+-- @args http-method-tamper.uri Base URI to crawl. Not aplicable if <code>http-method-tamper.paths</code> is set.
 -- @args http-method-tamper.paths Array of paths to check. If not set, the script will crawl the web server.
+-- @args http-method-tamper.timeout Web crawler timeout. Default: 10000ms
 ---
 
 author = "Paulino Calderon <calderon()websec.mx>"
@@ -35,22 +67,22 @@ portrule = shortport.http
 
 --
 -- Checks if the web server does not return status 401 when requesting with other HTTP verbs.
--- First, it tries with HEAD and then with a random string.
+-- First, it tries with HEAD, POST and then with a random string.
 --
 local function probe_http_verbs(host, port, uri)
   stdnse.print_debug(2, "%s:Tampering HTTP verbs %s", SCRIPT_NAME, uri)
   local head_req = http.head(host, port, uri)
   if head_req and head_req.status ~= 401 then
-    return true
+    return true, "HEAD"
   end 
   local post_req = http.post(host, port, uri)
   if post_req and post_req.status ~= 401 then
-    return true
+    return true, "POST"
   end 
- 
+  --With a random generated verb we also look for "invalid method" status 501 
   local random_verb_req = http.generic_request(host, port, stdnse.generate_random_string(4), uri)
   if random_verb_req and random_verb_req.status ~= 401 and random_verb_req.status ~= 501 then
-    return true
+    return true, "GENERIC"
   end 
   
   return false
@@ -65,9 +97,12 @@ action = function(host, port)
        title = 'Authentication bypass by HTTP verb tampering',
        state = vulns.STATE.NOT_VULN,
        description = [[
-Some password protected resources are vulnerable to authentication bypass by HTTP verb tampering. This web server returns different status code responses when using an unexpected HTTP verb.
+This web server contains password protected resources vulnerable to authentication bypass 
+vulnerabilities via HTTP verb tampering. This is often found in web servers that only limit access to the
+ common HTTP methods and in misconfigured .htaccess files.
        ]],
        references = {
+            'http://www.mkit.com.ar/labs/htexploit/',
             'http://www.imperva.com/resources/glossary/http_verb_tampering.html',
             'https://www.owasp.org/index.php/Testing_for_HTTP_Methods_and_XST_%28OWASP-CM-008%29',
             'http://capec.mitre.org/data/definitions/274.html'
@@ -92,9 +127,10 @@ Some password protected resources are vulnerable to authentication bypass by HTT
       if r.response.status == 401 then
         stdnse.print_debug(2, "%s:%s is protected! Let's try some verb tampering...", SCRIPT_NAME, tostring(r.url))
         local parsed = url.parse(tostring(r.url))
-        if probe_http_verbs(host, port, parsed.path) then
+        local probe_status, probe_type = probe_http_verbs(host, port, parsed.path)
+        if probe_status then
           stdnse.print_debug(1, "%s:Vulnerable URI %s", SCRIPT_NAME, uri)
-          table.insert(vuln_uris, parsed.path)
+          table.insert(vuln_uris, parsed.path..string.format(" [%s]", probe_type))
         end
       end
     end
@@ -105,14 +141,15 @@ Some password protected resources are vulnerable to authentication bypass by HTT
     if ( type(paths) == "string" ) then
       paths = { paths }
     end
-    
+    -- iterate through given paths/files
     for _, path in ipairs(paths) do
       local path_req = http.get(host, port, path)
 
       if path_req.status == 401 then
-         if probe_http_verbs(host, port, path) then
+        local probe_status, probe_type = probe_http_verbs(host, port, path)
+         if probe_status then
           stdnse.print_debug(1, "%s:Vulnerable URI %s", SCRIPT_NAME, path)
-          table.insert(vuln_uris, path)
+          table.insert(vuln_uris, path..string.format(" [%s]", probe_type))
          end
       end
     
