@@ -4518,6 +4518,18 @@ table.insert(fingerprints, {
 ----        MANAGEMENT SOFTWARE             ----
 ------------------------------------------------
 table.insert(fingerprints, {
+  category = 'management',
+  probes = {
+    { path = "", method = "head" }
+  },
+  matches = {
+    {match = "",
+     output = "Seagate blackarmor Web admin"
+    } 
+  }
+}
+
+table.insert(fingerprints, {
     category = 'management',
     probes = {
       {
@@ -6288,11 +6300,13 @@ table.insert(fingerprints, {
     probes = {
       {
         path = '/sdk/../../../../../../../etc/vmware/hostd/vmInventory.xml',
-        method = 'GET'
+        method = 'GET',
+        nopipeline = true
       },
       {
         path = '/sdk/%2E%2E/%2E%2E/%2E%2E/%2E%2E/%2E%2E/%2E%2E/%2E%2E/etc/vmware/hostd/vmInventory.xml',
-        method = 'GET'
+        method = 'GET',
+        nopipeline = true
       }
     },
     matches = {
@@ -6312,11 +6326,13 @@ table.insert(fingerprints, {
     probes = {
       {
         path = '/../../../../../../../../../../etc/passwd',
-        method = 'GET'
+        method = 'GET',
+        nopipeline = true
       },
       {
         path = '/../../../../../../../../../../boot.ini',
-        method = 'GET'
+        method = 'GET',
+        nopipeline = true
       }
     },
     matches = {
@@ -9958,7 +9974,7 @@ table.insert(fingerprints, {
         method = 'GET'
       },
       {
-        path = '/My Shared Folder/',
+        path = '/My%20Shared%20Folder/',
         method = 'GET'
       },
       {

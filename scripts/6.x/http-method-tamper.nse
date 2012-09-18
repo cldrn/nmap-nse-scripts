@@ -1,14 +1,16 @@
 description = [[
-Crawls a web server looking for password protected resources (HTTP 401 status) and attempts to bypass 
-the authentication by performing HTTP verb tampering.
+Attempts to bypass password protected resources (HTTP 401 status) by performing HTTP verb tampering. 
+If an array of paths to check is not set, it will crawl the web server and perform the check against any 
+password protected resource that it finds.
 
 The script determines if the protected URI is vulnerable by performing HTTP verb tampering and monitoring
  the status codes. First, it uses a HEAD request, then a POST request and finally a random generated string 
-( This last one is useful when web servers treat unknown request methods as a GET request).
+( This last one is useful when web servers treat unknown request methods as a GET request. This is the case
+ for PHP servers ).
 
 If the table <code>paths</code> is set, it will attempt to access the given URIs. Otherwise, a web crawler 
-is initiated to try to find protected resources. Keep in mind that is more likely to find a resource 
-vulnerable to HTTP verb tampering when accessing a file.
+is initiated to try to find protected resources. Note that in a PHP environment with .htacess files you need to specify a 
+path to a file rather than a directory to find misconfigured .htaccess files.
 
 References:
 * http://www.imperva.com/resources/glossary/http_verb_tampering.html

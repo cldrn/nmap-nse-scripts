@@ -8,7 +8,8 @@
 -- helper function can be used to parse and retrieve a full URL. 
 --
 -- These functions return a table of values, including:
--- * <code>status-line</code> - A string representing the status, such as "HTTP/1.1 200 OK"
+-- * <code>status-line</code> - A string representing the status, such as "HTTP/1.1 200 OK". In case of an error, a description will be provided in this line.
+-- * <code>status</code>: The HTTP status value; for example, "200". If an error occurs during a request, then this value is going to be nil.
 -- * <code>header</code> - An associative array representing the header. Keys are all lowercase, and standard headers, such as 'date', 'content-length', etc. will typically be present. 
 -- * <code>rawheader</code> - A numbered array of the headers, exactly as the server sent them. While header['content-type'] might be 'text/html', rawheader[3] might be 'Content-type: text/html'.
 -- * <code>cookies</code> - A numbered array of the cookies the server sent. Each cookie is a table with the following keys: <code>name</code>, <code>value</code>, <code>path</code>, <code>domain</code>, and <code>expires</code>. 
@@ -46,10 +47,9 @@
 -- <code>can_use_head</code>, and <code>save_path</code>. See the appropriate documentation
 -- for them. 
 --
--- The response to each function is typically a table on success or nil on failure. If
--- a table is returned, the following keys will exist:
--- <code>status-line</code>: The HTTP status line; for example, "HTTP/1.1 200 OK" (note: this is followed by a newline)
--- <code>status</code>: The HTTP status value; for example, "200"
+-- The response to each function is typically a table with the following keys:
+-- <code>status-line</code>: The HTTP status line; for example, "HTTP/1.1 200 OK" (note: this is followed by a newline). In case of an error, a description will be provided in this line.
+-- <code>status</code>: The HTTP status value; for example, "200". If an error occurs during a request, then this value is going to be nil.
 -- <code>header</code>: A table of header values, where the keys are lowercase and the values are exactly what the server sent
 -- <code>rawheader</code>: A list of header values as "name: value" strings, in the exact format and order that the server sent them
 -- <code>cookies</code>: A list of cookies that the server is sending. Each cookie is a table containing the keys <code>name</code>, <code>value</code>, and <code>path</code>. This table can be sent to the server in subsequent responses in the <code>options</code> table to any function (see below). 
@@ -65,7 +65,8 @@
 -- ** <code>name</code>
 -- ** <code>value</code>
 -- ** <code>path</code>
--- * <code>auth</code>: A table containing the keys <code>username</code> and <code>password</code>, which will be used for HTTP Basic authentication
+-- * <code>auth</code>: A table containing the keys <code>username</code> and <code>password</code>, which will be used for HTTP Basic authentication.
+--   If a server requires HTTP Digest authentication, then there must also be a key <code>digest</code>, with value <code>true</code>.
 -- * <code>bypass_cache</code>: Do not perform a lookup in the local HTTP cache.
 -- * <code>no_cache</code>: Do not save the result of this request to the local HTTP cache.
 -- * <code>no_cache_body</code>: Do not save the body of the response to the local HTTP cache.
@@ -90,9 +91,11 @@
 -- A value of the empty string disables sending the User-Agent header field.
 --
 -- @args http.pipeline If set, it represents the number of HTTP requests that'll be
--- pipelined (ie, sent in a single request). This can be set low to make
--- debugging easier, or it can be set high to test how a server reacts (its
--- chosen max is ignored).
+-- sent on one connection. This can be set low to make debugging easier, or it 
+-- can be set high to test how a server reacts (its chosen max is ignored).
+-- @args http.max-pipeline If set, it represents the number of outstanding  HTTP requests
+-- that should be pipelined. Defaults to <code>http.pipeline</code> (if set), or to what
+-- <code>getPipelineMax</code> function returns.
 --
 -- TODO
 -- Implement cache system for http pipelines
@@ -103,8 +106,8 @@ local base64 = require "base64"
 local comm = require "comm"
 local coroutine = require "coroutine"
 local nmap = require "nmap"
-local openssl = require "openssl"
 local os = require "os"
+local sasl = require "sasl"
 local stdnse = require "stdnse"
 local string = require "string"
 local table = require "table"
@@ -112,7 +115,7 @@ local url = require "url"
 _ENV = stdnse.module("http", stdnse.seeall)
 
 ---Use ssl if we have it
-local have_ssl = (nmap.have_ssl() and pcall(require, "openssl"))
+local have_ssl, openssl = pcall(require,'openssl')
 
 local USER_AGENT = stdnse.get_script_args('http.useragent') or "Mozilla/5.0 (compatible; Nmap Scripting Engine; http://nmap.org/book/nse.html)"
 local MAX_REDIRECT_COUNT = 5
@@ -326,6 +329,20 @@ local function validate_options(options)
       else
         stdnse.print_debug(1, "http: options.auth should be a table")
         bad = true
+      end
+    elseif (key == 'digestauth') then
+      if(type(value) == 'table') then
+        local req_keys = {"username","realm","nonce","digest-uri","response"}
+        for _,k in ipairs(req_keys) do
+          if not value[k] then
+            stdnse.print_debug(1, "http: options.digestauth missing key: %s",k)
+            bad = true
+            break
+          end
+        end
+      else
+        bad = true
+        stdnse.print_debug(1, "http: options.digestauth should be a table")
       end
     elseif(key == 'bypass_cache' or key == 'no_cache' or key == 'no_cache_body') then
       if(type(value) ~= 'boolean') then
@@ -938,6 +955,7 @@ end
 local WORKING = setmetatable({}, {__mode = "v"});
 
 local function lookup_cache (method, host, port, path, options)
+  print( method, host, port, path, options)
   if(not(validate_options(options))) then
     return nil
   end
@@ -984,6 +1002,12 @@ local function lookup_cache (method, host, port, path, options)
 end
 
 local function response_is_cacheable(response)
+  -- if response.status is nil, then an error must have occured during the request
+  -- and we probably don't want to cache the response
+  if not response.status then
+    return false
+  end
+  
   -- 206 Partial Content. RFC 2616, 1.34: "...a cache that does not support the
   -- Range and Content-Range headers MUST NOT cache 206 (Partial Content)
   -- responses."
@@ -1046,8 +1070,19 @@ end
 -- The format of the return value is a table with the following structure:
 -- {status = 200, status-line = "HTTP/1.1 200 OK", header = {}, rawheader = {}, body ="<html>...</html>"}
 -- The header table has an entry for each received header with the header name
--- being the key the table also has an entry named "status" which contains the
--- http status code of the request in case of an error status is nil.
+-- being the key. The table also has an entry named "status" which contains the
+-- http status code of the request.
+-- In case of an error, the status is nil and status-line describes the problem.
+
+local function http_error(status_line)
+  return {
+    status = nil,
+    ["status-line"] = status_line,
+    header = {},
+    rawheader = {},
+    body = nil,
+  }
+end
 
 --- Build an HTTP request from parameters and return it as a string.
 --
@@ -1083,11 +1118,33 @@ local function build_request(host, port, method, path, options)
       mod_options.header["Cookie"] = cookies
     end
   end
-  -- Only Basic authentication is supported.
-  if options.auth then
+
+  if options.auth and not options.auth.digest then
     local username = options.auth.username
     local password = options.auth.password
     local credentials = "Basic " .. base64.enc(username .. ":" .. password)
+    mod_options.header["Authorization"] = credentials
+  end
+
+  if options.digestauth then
+    local order = {"username", "realm", "nonce", "digest-uri", "algorithm", "response", "qop", "nc", "cnonce"}
+    local no_quote = {algorithm=true, qop=true, nc=true}
+    local creds = {}
+    for _,k in ipairs(order) do
+      local v = options.digestauth[k]
+      if v then
+        if no_quote[k] then
+          table.insert(creds, ("%s=%s"):format(k,v))
+        else
+          if k == "digest-uri" then
+            table.insert(creds, ('%s="%s"'):format("uri",v))
+          else
+            table.insert(creds, ('%s="%s"'):format(k,v))
+          end
+        end
+      end
+    end
+    local credentials = "Digest "..table.concat(creds, ", ")
     mod_options.header["Authorization"] = credentials
   end
 
@@ -1135,11 +1192,11 @@ end
 -- * <code>content</code>: The content of the message (content-length will be added -- set header['Content-Length'] to override)
 -- * <code>cookies</code>: A table of cookies in the form returned by <code>parse_set_cookie</code>.
 -- * <code>auth</code>: A table containing the keys <code>username</code> and <code>password</code>.
--- @return A table as described in the module description.
+-- @return A response table, see module documentation for description.
 -- @see generic_request
 local function request(host, port, data, options)
   if(not(validate_options(options))) then
-    return nil
+    return http_error("Options failed to validate.")
   end
   local method
   local header
@@ -1150,24 +1207,22 @@ local function request(host, port, data, options)
   if type(port) == 'table' then
     if port.protocol and port.protocol ~= 'tcp' then
       stdnse.print_debug(1, "http.request() supports the TCP protocol only, your request to %s cannot be completed.", host)
-      return nil
+      return http_error("Unsupported protocol.")
     end
   end
-
-  local error_response = {status=nil,["status-line"]=nil,header={},body=""}
 
   method = string.match(data, "^(%S+)")
 
   local socket, partial, opts = comm.tryssl(host, port, data, { timeout = options.timeout })
 
   if not socket then
-    return error_response
+    return http_error("Error creating socket.")
   end
 
   repeat
     response, partial = next_response(socket, method, partial)
     if not response then
-      return error_response
+      return http_error("There was an error in next_response function.")
     end
     -- See RFC 2616, sections 8.2.3 and 10.1.1, for the 100 Continue status.
     -- Sometimes a server will tell us to "go ahead" with a POST body before
@@ -1195,12 +1250,36 @@ end
 -- @param method The method to use; for example, 'GET', 'HEAD', etc.
 -- @param path The path to retrieve.
 -- @param options [optional] A table that lets the caller control socket timeouts, HTTP headers, and other parameters. For full documentation, see the module documentation (above). 
--- @return <code>nil</code> if an error occurs; otherwise, a table as described in the module documentation. 
+-- @return A response table, see module documentation for description.
 -- @see request
 function generic_request(host, port, method, path, options)
   if(not(validate_options(options))) then
-    return nil
+    return http_error("Options failed to validate.")
   end
+  
+  local digest_auth = options and options.auth and options.auth.digest
+
+  if digest_auth and not have_ssl then
+    stdnse.print_debug("http: digest auth requires openssl.")
+  end
+
+  if digest_auth and have_ssl then
+    -- If we want to do digest authentication, we have to make an initial
+    -- request to get realm, nonce and other fields.
+    local options_with_auth_removed = tcopy(options)
+    options_with_auth_removed["auth"] = nil
+    local r = generic_request(host, port, method, path, options_with_auth_removed)
+    local h = r.header['www-authenticate']
+    if not r.status or (h and not string.find(h:lower(), "digest.-realm")) then
+      stdnse.print_debug("http: the target doesn't support digest auth or there was an error during request.")
+      return http_error("The target doesn't support digest auth or there was an error during request.")
+    end
+    -- Compute the response hash
+    local dmd5 = sasl.DigestMD5:new(h, options.auth.username, options.auth.password, method, path)
+    local _, digest_table = dmd5:calcDigest()
+    options.digestauth = digest_table
+  end
+
   return request(host, port, build_request(host, port, method, path, options), options)
 end
 
@@ -1212,14 +1291,14 @@ end
 -- @param path The path to retrieve.
 -- @param options [optional] A table that lets the caller control socket timeouts, HTTP headers, and other parameters. For full documentation, see the module documentation (above). 
 -- @param putdata The contents of the file to upload
--- @return <code>nil</code> if an error occurs; otherwise, a table as described in the module documentation. 
+-- @return A response table, see module documentation for description.
 -- @see http.generic_request
 function put(host, port, path, options, putdata)
   if(not(validate_options(options))) then
-    return nil
+    return http_error("Options failed to validate.")
   end
   if ( not(putdata) ) then
-	return nil
+    return http_error("No file to PUT.")
   end
   local mod_options = {
     content = putdata,
@@ -1385,11 +1464,11 @@ end
 -- @param port The port to connect to.
 -- @param path The path to retrieve.
 -- @param options [optional] A table that lets the caller control socket timeouts, HTTP headers, and other parameters. For full documentation, see the module documentation (above). 
--- @return <code>nil</code> if an error occurs; otherwise, a table as described in the module documentation. 
+-- @return A response table, see module documentation for description.
 -- @see http.generic_request
 function get(host, port, path, options)
   if(not(validate_options(options))) then
-    return nil
+    return http_error("Options failed to validate.")
   end
   local redir_check = get_redirect_ok(host, port, options)
   local response, state, location
@@ -1416,11 +1495,11 @@ end
 --
 -- @param u The URL of the host.
 -- @param options [optional] A table that lets the caller control socket timeouts, HTTP headers, and other parameters. For full documentation, see the module documentation (above). 
--- @return <code>nil</code> if an error occurs; otherwise, a table as described in the module documentation. 
+-- @return A response table, see module documentation for description.
 -- @see http.get
 function get_url( u, options )
   if(not(validate_options(options))) then
-    return nil
+    return http_error("Options failed to validate.")
   end
   local parsed = url.parse( u )
   local port = {}
@@ -1463,11 +1542,11 @@ end
 -- @param port The port to connect to.
 -- @param path The path to retrieve.
 -- @param options [optional] A table that lets the caller control socket timeouts, HTTP headers, and other parameters. For full documentation, see the module documentation (above). 
--- @return <code>nil</code> if an error occurs; otherwise, a table as described in the module documentation. 
+-- @return A response table, see module documentation for description.
 -- @see http.generic_request
 function head(host, port, path, options)
   if(not(validate_options(options))) then
-    return nil
+    return http_error("Options failed to validate.")
   end
   local redir_check = get_redirect_ok(host, port, options)
   local response, state, location
@@ -1499,11 +1578,11 @@ end
 -- @param options [optional] A table that lets the caller control socket timeouts, HTTP headers, and other parameters. For full documentation, see the module documentation (above). 
 -- @param ignored Ignored for backwards compatibility.
 -- @param postdata A string or a table of data to be posted. If a table, the keys and values must be strings, and they will be encoded into an application/x-www-form-encoded form submission.
--- @return <code>nil</code> if an error occurs; otherwise, a table as described in the module documentation. 
+-- @return A response table, see module documentation for description.
 -- @see http.generic_request
 function post( host, port, path, options, ignored, postdata )
   if(not(validate_options(options))) then
-    return nil
+    return http_error("Options failed to validate.")
   end
   local mod_options = {
     content = postdata,
@@ -1609,14 +1688,16 @@ function pipeline_go(host, port, all_requests)
 
   table.insert(responses, response)
 
-  local limit = getPipelineMax(response)
+  local limit = getPipelineMax(response) -- how many requests to send on one connection
+  limit = limit > #all_requests and #all_requests or limit
+  local max_pipeline = stdnse.get_script_args("http.max-pipeline") or limit -- how many requests should be pipelined
   local count = 1
   stdnse.print_debug(1, "Number of requests allowed by pipeline: " .. limit)
 
   while #responses < #all_requests do
     local j, batch_end
-    -- we build a big string with many requests, upper limited by the var "limit"
-    local requests = ""
+    -- we build a table with many requests, upper limited by the var "limit"
+    local requests = {}
 
     if #responses + limit < #all_requests then
       batch_end = #responses + limit
@@ -1629,27 +1710,57 @@ function pipeline_go(host, port, all_requests)
       if j == batch_end then
         all_requests[j].options.header["Connection"] = "close"
       end
-
-      requests = requests .. build_request(host, port, all_requests[j].method, all_requests[j].path, all_requests[j].options)
+      if j~= batch_end and all_requests[j].options.header["Connection"] ~= 'keep-alive' then
+        all_requests[j].options.header["Connection"] = 'keep-alive'
+      end
+      table.insert(requests, build_request(host, port, all_requests[j].method, all_requests[j].path, all_requests[j].options))
+      -- to avoid calling build_request more then one time on the same request,
+      -- we might want to build all the requests once, above the main while loop
       j = j + 1
     end
 
-    -- Connect to host and send all the requests at once!
     if count >= limit or not socket:get_info() then
       socket:connect(host, port, bopt)
       partial = ""
       count = 0
     end
     socket:set_timeout(10000)
-    socket:send(requests)
-
-    while #responses < #all_requests do
-      response, partial = next_response(socket, all_requests[#responses + 1].method, partial)
-      if not response then
-        break
+    
+    local start = 1
+    local len = #requests
+    local req_sent = 0
+    -- start sending the requests and pipeline them in batches of max_pipeline elements
+    while start <= len do
+      stdnse.print_debug(2, "HTTP pipeline: number of requests in current batch: %d, already sent: %d, responses from current batch: %d, all responses received: %d",len,start-1,count,#responses)
+      local req = {}
+      if max_pipeline == limit then
+        req = requests
+      else
+        for i=start,start+max_pipeline-1,1 do
+          table.insert(req, requests[i])
+        end
       end
-      count = count + 1
-      responses[#responses + 1] = response
+      local num_req = #req
+      req = table.concat(req, "")
+      start = start + max_pipeline
+      socket:send(req)
+      req_sent = req_sent + num_req
+      local inner_count = 0
+      local fail = false
+      -- collect responses for the last batch
+      while inner_count < num_req and #responses < #all_requests do
+        response, partial = next_response(socket, all_requests[#responses + 1].method, partial)
+        if not response then
+          stdnse.print_debug("HTTP pipeline: there was a problem while receiving responses.")
+          stdnse.print_debug(3, "The request was:\n%s",req)
+          fail = true
+          break
+        end
+        count = count + 1
+        inner_count = inner_count + 1
+        responses[#responses + 1] = response
+      end
+      if fail then break end
     end
 
     socket:close()
@@ -1657,8 +1768,8 @@ function pipeline_go(host, port, all_requests)
     if count == 0 then
       stdnse.print_debug("Received 0 of %d expected responses.\nGiving up on pipeline.", limit);
       break
-    elseif count < limit then
-      stdnse.print_debug("Received only %d of %d expected responses.\nDecreasing max pipelined requests to %d.", count, limit, count)
+    elseif count < req_sent then
+      stdnse.print_debug("Received only %d of %d expected responses.\nDecreasing max pipelined requests to %d.", count, req_sent, count)
       limit = count
     end
   end
@@ -1746,6 +1857,7 @@ end
 -- @return A list of forms.
 function grab_forms(body)
   local forms = {}
+  if not body then return forms end
   local form_start_expr = '<%s*[Ff][Oo][Rr][Mm]'
   local form_end_expr = '</%s*[Ff][Oo][Rr][Mm]>'
   
@@ -1814,7 +1926,7 @@ function parse_form(form)
     local next_field_index = #fields+1
     if input_name then
       fields[next_field_index] = {}
-      fields[next_field_index]["name"] = string.lower(input_name)
+      fields[next_field_index]["name"] = input_name
       fields[next_field_index]["type"] = "textarea"
     end
   end
@@ -2214,7 +2326,7 @@ end
 --
 -- @param data The data returned by the HTTP request
 -- @param result_404 The status code to expect for non-existent pages. This is returned by <code>identify_404</code>.
--- @param known_404 The 404 page itself, if <code>result_404</code> is 200. If <code>result_404</code> is something else, this parameter is ignored and can be set to <code>nil</code>. This is returned by <code>identfy_404</code>.
+-- @param known_404 The 404 page itself, if <code>result_404</code> is 200. If <code>result_404</code> is something else, this parameter is ignored and can be set to <code>nil</code>. This is returned by <code>identify_404</code>.
 -- @param page The page being requested (used in error messages).
 -- @param displayall [optional] If set to true, don't exclude non-404 errors (such as 500). 
 -- @return A boolean value: true if the page appears to exist, and false if it does not.
