@@ -47,8 +47,9 @@ local PAYLOAD_TIME = [=[<?xml version="1.0" encoding="UTF-8"?>
 
 local PAYLOAD_MALFORMED = [=[<?xml version="1.0" encoding="UTF-8"?>
 <probe type="yaml"><![CDATA[
---- !ruby/object:.
-]]></probe>]=]
+--- !ruby/object:^@
+]]></probe>
+]=]
 
 local function detect(host, port, uri)
   local opts = {
@@ -65,7 +66,9 @@ local function detect(host, port, uri)
   if req_ok.status == 200 and req_time.status == 200 then
 
     opts["content"] = PAYLOAD_MALFORMED
-    local req_malformed = http.generic_request(host, port, "POST", uri, opts)
+    local opts2 = {header={}}
+    opts2["header"]["Content-type"] = 'application/xml'
+    local req_malformed = http.post(host, port, uri, opts2, nil, PAYLOAD_MALFORMED)
     stdnse.print_debug(1, "%s:Malformed request returned status %d", SCRIPT_NAME, req_malformed.status)
     if req_malformed.status == 500 then
       return true
@@ -94,7 +97,7 @@ The attackers don't need to be authenticated to exploit these vulnerabilities.
   }
 
   if detect(host,port,uri) then
-    stdnse.print_debug(1, "%s:Received status 200 and 500 as expected in vulnerable installations. Marking as vulnerable.", SCRIPT_NAME)
+    stdnse.print_debug(1, "%s:Received status 500 as expected in vulnerable installations. Marking as vulnerable...", SCRIPT_NAME)
     vuln_table.state = vulns.STATE.VULN
     local report = vulns.Report:new(SCRIPT_NAME, host, port)
     return report:make_output(vuln_table) 
