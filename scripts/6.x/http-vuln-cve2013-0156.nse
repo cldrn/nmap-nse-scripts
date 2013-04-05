@@ -36,7 +36,7 @@ portrule = shortport.http
 
 local PAYLOAD_OK = [=[<?xml version="1.0" encoding="UTF-8"?>
 <probe type="string"><![CDATA[
-hello
+nmap
 ]]></probe>]=]
 
 local PAYLOAD_TIME = [=[<?xml version="1.0" encoding="UTF-8"?>
@@ -54,18 +54,19 @@ local function detect(host, port, uri)
   local opts = {
     header = {
       Host = host.ip,
-      Connection = nil,
-      ["User-Agent"]  = "Mozilla/5.0 (compatible; Nmap Scripting Engine; http://nmap.org/book/nse.html)",
+      ["User-Agent"]  = stdnse.get_script_args("http.useragent") or "Mozilla/5.0 (compatible; Nmap Scripting Engine; http://nmap.org/book/nse.html)",
       ["Content-Type"] = "application/xml",
     }}
   opts["content"] = PAYLOAD_OK
   local req_ok = http.generic_request(host, port, "POST", uri, opts)
   opts["content"] = PAYLOAD_TIME
   local req_time = http.generic_request(host, port, "POST", uri, opts)
+  stdnse.print_debug(1, "%s:First request returned status %d. Second request returned status %d", SCRIPT_NAME, req_ok.status, req_time.status)
   if req_ok.status == 200 and req_time.status == 200 then
 
     opts["content"] = PAYLOAD_MALFORMED
     local req_malformed = http.generic_request(host, port, "POST", uri, opts)
+    stdnse.print_debug(1, "%s:Malformed request returned status %d", SCRIPT_NAME, req_malformed.status)
     if req_malformed.status == 500 then
       return true
     end
