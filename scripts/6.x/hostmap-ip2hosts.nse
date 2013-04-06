@@ -30,7 +30,7 @@ The script is in the "external" category because it sends target IPs to a third 
 -- |_  output: Saved to hostmap-insecure.org
 ---
 
-author = {'Ange Gutek', 'Paulino Calderon'}
+author = {'Ange Gutek', 'Paulino Calderon <calderon@websec.mx>'}
 
 license = "Same as Nmap--See http://nmap.org/book/man-legal.html"
 
