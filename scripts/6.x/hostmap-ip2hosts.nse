@@ -30,7 +30,7 @@ The script is in the "external" category because it sends target IPs to a third 
 -- |_  output: Saved to hostmap-insecure.org
 ---
 
-author = {'Ange Gutek', 'Paulino Calderon <calderon@websec.mx>'}
+author = {'Paulino Calderon <calderon@websec.mx>'}
 
 license = "Same as Nmap--See http://nmap.org/book/man-legal.html"
 
@@ -66,6 +66,8 @@ local function query_bing(ip)
       if target.ALLOW_NEW_TARGETS then
         local status, err = target.add(entry)
       end
+      entry = string.gsub(entry, "(https://)", "")
+      entry = string.gsub(entry, "(http://)", "")
       hostnames[#hostnames + 1] = entry
     end
   end
@@ -84,22 +86,18 @@ action = function(host)
   local hostnames_str, output_str 
   local output_tab = stdnse.output_table()
   stdnse.print_debug(1, "Using database: %s", HOSTMAP_BING_SERVER)
-  output_tab.ip = host.ip
   hostnames = query_bing(host.ip)
 
-  if type(hostnames) == "string" then
-    return hostnames
-  end
-  hostnames_str = stdnse.strjoin("\n", hostnames)
-  output_tab.hosts = "\n"..hostnames_str
+  output_tab.hosts = hostnames
   --write to file
   if filename_prefix then
     local filename = filename_prefix .. filename_escape(host.targetname or host.ip)
-    local status, err = write_file(filename, hostnames_str .. "\n")
+    hostnames_str = stdnse.strjoin("\n", hostnames)
+    local status, err = write_file(filename, hostnames_str)
     if status then
-      output_tab.output = string.format("Saved to %s\n", filename)
+      output_tab.filename = filename
     else
-      output_tab.output = string.format("Error saving to %s: %s\n", filename, err)
+      stdnse.print_debug(1, "There was an error saving the file %s:%s", filename, err)
     end
   end
 

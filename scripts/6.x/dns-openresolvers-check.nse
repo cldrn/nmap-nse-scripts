@@ -40,11 +40,11 @@ local stdnse = require "stdnse"
 local shortport = require "shortport"
 local vulns = require "vulns"
 
-portrule = shortport.portnumber(53, {"tcp","udp"})
+--portrule = shortport.portnumber(53, {"tcp","udp"})
 
 --Maybe we dont need the service running,
 -- we are looking at a database afterall
----hostrule = function(host) return true end 
+hostrule = function(host) return true end 
 
 local DNSBL = "dnsbl.openresolvers.org"
 
