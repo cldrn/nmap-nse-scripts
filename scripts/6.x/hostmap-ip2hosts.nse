@@ -15,19 +15,28 @@ The script is in the "external" category because it sends target IPs to a third 
 --
 -- @usage
 -- nmap --script hostmap-ip2hosts --script-args 'hostmap-ip2hosts.prefix=hostmap-' <targets>
---
+-- @usage
+-- nmap -sn --script hostmap-ip2hosts <target>
+-- @xml-output 
 -- @output
 -- Host script results:
 -- | hostmap-ip2hosts: 
--- |   ip: 74.207.254.18
 -- |   hosts: 
--- | http://insecure.org
--- | http://nmap.org
--- | http://sectools.org
--- | http://seclists.org
--- | https://secwiki.org
--- | http://cgi.insecure.org
--- |_  output: Saved to hostmap-insecure.org
+-- |     insecure.org
+-- |     nmap.org
+-- |     sectools.org
+-- |     svn.nmap.org
+-- |     cgi.insecure.org
+-- |_  filename: output_nmap.org
+-- @xmloutput
+-- <table key="hosts">
+--  <elem>insecure.org</elem>
+--  <elem>nmap.org</elem>
+--  <elem>sectools.org</elem>
+--  <elem>svn.nmap.org</elem>
+--  <elem>cgi.insecure.org</elem>
+--  </table>
+-- <elem key="filename">output_nmap.org</elem>
 ---
 
 author = {'Paulino Calderon <calderon@websec.mx>'}
