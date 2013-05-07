@@ -62,8 +62,10 @@ local function get_installation_path(host, port, basepath)
   if req.header['set-cookie'] then
     stdnse.print_debug(1, "%s:Header 'set-cookie' detected in response.", SCRIPT_NAME)
     local _, _, path = string.find(req.header['set-cookie'], "path=/, ANALYZER_DIRECTORY=(.-);path=/")
-    stdnse.print_debug(1, "%s: Extracted path:%s", SCRIPT_NAME, path)
-    return path
+    if path then
+      stdnse.print_debug(1, "%s: Extracted path:%s", SCRIPT_NAME, path)
+      return path
+    end
   end
   return nil
 end
