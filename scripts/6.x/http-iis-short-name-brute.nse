@@ -100,9 +100,7 @@ local function findName(host, port, path, number)
 	-- check if the name is valid
 	if foundName(host, port, path, number) then
 		if isFolder(host, port, path, number) then
-                        print(number,last_number,errors)
 			if tonumber(number) == (last_number + 1) then
-				print(number,last_number+1)
 				errors = errors+1
 			end
 			if errors>10 then
