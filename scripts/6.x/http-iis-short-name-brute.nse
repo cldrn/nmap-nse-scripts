@@ -1,19 +1,14 @@
 description = [[
-This script is a implementation of 'iis-shortname-scanner-poc found here:
-http://code.google.com/p/iis-shortname-scanner-poc/
-
-The research documentation can be found here:
-http://soroush.secproject.com/downloadable/microsoft_iis_tilde_character_vulnerability_feature.pdf
+Attempts to brute force the shortname  an information disclosure vulnerability in vulnerable IIS servers. This script is an implementation 
 
 The script uses almost the same approach described in the paper, which uses ~,? and * 
 to bruteforce the shortname of files present in the IIS document root.
 
 The script might have to be run twice (according to the original author). 
 
-Side note:
-In the research file it is claimed that is approach can be used to conduct DoS attacks (disk load) by using
-different attack strings of the same type. This script is not meant to do this, and the attack
-strings should be safe. 
+References:
+* Research paper: http://soroush.secproject.com/downloadable/microsoft_iis_tilde_character_vulnerability_feature.pdf
+* IIS Shortname Scanner: http://code.google.com/p/iis-shortname-scanner-poc/
 
 CHANGELOG:
 * Added special case to detect false positives in certain environments (paulino)
@@ -35,7 +30,7 @@ CHANGELOG:
 -- 
 ---
 
-author = "Jesper Kueckelhahn"
+author = {"Jesper Kueckelhahn", "Paulino Calderon"}
 license = "Same as Nmap--See http://nmap.org/book/man-legal.html"
 categories = {"intrusive", "brute"}
 
@@ -140,6 +135,18 @@ end
 
 
 action = function(host, port)
+  local vuln = {
+       title = 'Microsoft IIS tilde character "~" shortname disclosure',
+       state = vulns.STATE.NOT_VULN,
+       description = [[
+Multiple IIS versions disclose the short names of files and directories with an 8.3 file naming scheme equivalent in Windows.
+       ]],
+       references = {
+           'http://soroush.secproject.com/downloadable/microsoft_iis_tilde_character_vulnerability_feature.pdf',
+    'http://soroush.secproject.com/downloadable/microsoft_iis_tilde_character_vulnerability_feature.pdf'
+       }
+     }
+  local vuln_report = vulns.Report:new(SCRIPT_NAME, host, port)
 
 	findName(host, port, "", "1")
         if errors_max then
