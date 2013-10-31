@@ -1,5 +1,5 @@
 description = [[
-Attempts to brute force the 8.3 filename (commonly known as short name) of files and directories in the root folder of vulnerable IIS servers. This script is an implementation of the PoC "iis shortname scanner".
+Attempts to brute force the 8.3 filenames (commonly known as short names) of files and directories in the root folder of vulnerable IIS servers. This script is an implementation of the PoC "iis shortname scanner".
 
 The script uses ~,? and * to bruteforce the short name of files present in the IIS document root. Short names have a restriction of 6 character file name followed by a three character extension.
 
@@ -15,17 +15,30 @@ References:
 ---
 -- @usage
 -- nmap -p80 --script http-iis-short-name-brute <target>
---
+-- 
 -- @output
--- PORT   STATE SERVICE REASON
+-- PORT   STATE SERVICE
 -- 80/tcp open  http
 -- | http-iis-short-name-brute: 
--- |   Folders
--- |     aspnet~1
--- |   Files
--- |     sql~1.bak
--- |_    test~1.php
--- 
+-- |   VULNERABLE:
+-- |   Microsoft IIS tilde character "~" short name disclosure and denial of service
+-- |     State: VULNERABLE (Exploitable)
+-- |     Description:
+-- |      Vulnerable IIS servers disclose folder and file names with a Windows 8.3 naming scheme inside the webroot folder. Shortnames can be used to guess or brute force sensitive filenames. Attackers can exploit this vulnerability to cause a denial of service condition.
+-- |           
+-- |     Extra information:
+-- |       
+-- |   8.3 filenames found:
+-- |     Folders
+-- |       admini~1
+-- |     Files
+-- |       backup~1.zip
+-- |       certsb~2.zip
+-- |       siteba~1.zip
+-- |   
+-- |     References:
+-- |       http://soroush.secproject.com/downloadable/microsoft_iis_tilde_character_vulnerability_feature.pdf
+-- |_      http://code.google.com/p/iis-shortname-scanner-poc/
 ---
 
 author = {"Jesper Kueckelhahn", "Paulino Calderon"}
@@ -35,6 +48,7 @@ categories = {"intrusive", "brute"}
 local stdnse    = require "stdnse"
 local shortport = require "shortport"
 local http      = require "http"
+local vulns = require "vulns"
 
 portrule = shortport.http
 
@@ -128,10 +142,10 @@ end
 
 action = function(host, port)
   local vuln = {
-    title = 'Microsoft IIS tilde character "~" short name disclosure',
+    title = 'Microsoft IIS tilde character "~" short name disclosure and denial of service',
     state = vulns.STATE.NOT_VULN,
     description = [[
-Multiple IIS versions disclose the short names of files and directories with an 8.3 file naming scheme equivalent in Windows.
+Vulnerable IIS servers disclose folder and file names with a Windows 8.3 naming scheme inside the root folder. Shortnames can be used to guess or brute force sensitive filenames. Attackers can exploit this vulnerability to cause a denial of service condition.
     ]],
     references = {
       'http://soroush.secproject.com/downloadable/microsoft_iis_tilde_character_vulnerability_feature.pdf',
@@ -151,7 +165,7 @@ Multiple IIS versions disclose the short names of files and directories with an 
     results = {}
     table.insert(results, folders)
     table.insert(results, files)
-    vuln.state = vulns.STATE.VULNERABLE
+    vuln.state = vulns.STATE.EXPLOIT
     results.name = "8.3 filenames found:"
     vuln.extra_info = stdnse.format_output(true, results)
     return vuln_report:make_output(vuln)
