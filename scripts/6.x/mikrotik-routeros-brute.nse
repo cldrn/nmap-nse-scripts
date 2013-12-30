@@ -41,21 +41,19 @@ Driver =
   end,
 	
   connect = function( self )
-   
-    return true
+    self.s = nmap.new_socket("tcp")
+    self.s:set_timeout(self.options['timeout'])
+    return self.s:connect(self.host, self.port, "tcp")
   end,
 
   login = function( self, username, password )
     local status, data, try
     data = bin.pack("cAx", 0x6,"/login")
-    local socket = nmap.new_socket("tcp")
-    socket:set_timeout(self.options['timeout'])
 
     --Connect to service and obtain the challenge response
-    try = nmap.new_try(function() socket:close() return false end)
-    try(socket:connect(self.host.ip, self.port, "tcp"))
-    try(socket:send(data))
-    data = try(socket:receive_bytes(50))
+    try = nmap.new_try(function() return false end)
+    try(self.s:send(data))
+    data = try(self.s:receive_bytes(50))
     stdnse.print_debug(1, "Response #1:%s", data)
     local _, _, ret = string.find(data, '!done%%=ret=(.+)')
 
@@ -65,8 +63,8 @@ Driver =
         local md5str = bin.pack("xAA", password, ret)
         local chksum = stdnse.tohex(openssl.md5(md5str))
         local login_pkt = bin.pack("cAcAcAx", 0x6, "/login", 0x0b, "=name="..username, 0x2c, "=response=00"..chksum)
-        try(socket:send(login_pkt))
-        data = try(socket:receive_bytes(50))
+        try(self.s:send(login_pkt))
+        data = try(self.s:receive_bytes(50))
         stdnse.print_debug(1, "Response #2:%s", data)
         if data and string.find(data, "%!done") ~= nil then
           if string.find(data, "message=cannot") == nil then
@@ -76,12 +74,11 @@ Driver =
           end
         end
     end
-    socket:close()
     return false, brute.Error:new( "Incorrect password" )
   end,
   
   disconnect = function( self )
-    return true
+    return self.socket:close()
   end		
 }
 
