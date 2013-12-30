@@ -37,6 +37,7 @@ Driver =
   local o = { host = host, port = port, options = options }
   setmetatable(o, self)
   self.__index = self
+    o.emptypass
     return o
   end,
 	
