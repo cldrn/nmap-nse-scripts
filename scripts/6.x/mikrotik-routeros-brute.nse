@@ -79,7 +79,7 @@ Driver =
   end,
   
   disconnect = function( self )
-    return self.socket:close()
+    return self.s:close()
   end		
 }
 
