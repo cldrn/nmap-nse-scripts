@@ -48,24 +48,26 @@ Driver =
   end,
 
   login = function( self, username, password )
-    local status, data, try
+    local status, data, try, ret
     data = bin.pack("cAx", 0x6,"/login")
 
     --Connect to service and obtain the challenge response
-    try = nmap.new_try(function() return false end)
-    try(self.s:send(data))
-    data = try(self.s:receive_bytes(50))
+    try = nmap.new_try(function() return false, brute.Error:new( "Connection error" ) end)
+    self.s:send(data)
+    _, data = self.s:receive_bytes(50)
     stdnse.print_debug(1, "Response #1:%s", data)
-    local _, _, ret = string.find(data, '!done%%=ret=(.+)')
-
+    if type(data) == "string" then
+      _, _, ret = string.find(data, '!done%%=ret=(.+)')
+    end
     --If we find the challenge value we continue the connection process
     if ret then
         stdnse.print_debug(1, "Challenge value found:%s", ret)
         local md5str = bin.pack("xAA", password, ret:fromhex())
         local chksum = stdnse.tohex(openssl.md5(md5str))
         local login_pkt = bin.pack("cAcAcAx", 0x6, "/login", 0x0b, "=name="..username, 0x2c, "=response=00"..chksum)
-        try(self.s:send(login_pkt))
-        data = try(self.s:receive_bytes(50))
+        stdnse.print_debug(1, "%s:Login query:%s", SCRIPT_NAME, login_pkt)
+        self.s:send(login_pkt)
+        _, data = self.s:receive_bytes(50)
         stdnse.print_debug(1, "Response #2:%s", data)
         if data and string.find(data, "%!done") ~= nil then
           if string.find(data, "message=cannot") == nil then
@@ -90,7 +92,7 @@ end
 
 action = function(host, port)
   local result
-  local thread_num = stdnse.get_script_args(SCRIPT_NAME..".threads") or 3
+  local thread_num = stdnse.get_script_args(SCRIPT_NAME..".threads") or 1
   local options = {timeout = 5000}
   local bengine = brute.Engine:new(Driver, host, port, options)
 
