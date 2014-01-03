@@ -61,7 +61,7 @@ Driver =
     --If we find the challenge value we continue the connection process
     if ret then
         stdnse.print_debug(1, "Challenge value found:%s", ret)
-        local md5str = bin.pack("xAA", password, ret)
+        local md5str = bin.pack("xAA", password, ret:fromhex())
         local chksum = stdnse.tohex(openssl.md5(md5str))
         local login_pkt = bin.pack("cAcAcAx", 0x6, "/login", 0x0b, "=name="..username, 0x2c, "=response=00"..chksum)
         try(self.s:send(login_pkt))
@@ -82,6 +82,11 @@ Driver =
     return self.s:close()
   end		
 }
+function string.fromhex(str)
+    return (str:gsub('..', function (cc)
+        return string.char(tonumber(cc, 16))
+    end))
+end
 
 action = function(host, port)
   local result
