@@ -1,9 +1,16 @@
-description=[[
-Tries to obtain the PPPoE credentials, MAC address, firmware version and IP information of the aDSL modems 
-Huawei Echolife 520, 520b, 530 and possibly others by exploiting an information disclosure vulnerability via UDP.
+local stdnse = require "stdnse"
+local io = require "io"
+local shortport = require "shortport"
 
-The script works by sending a crafted UDP packet to port 43690 and then parsing the response that contains 
-the configuration values. This exploit has been reported to be blocked in some ISPs, in those cases the exploit seems to work fine in local networks.
+description=[[
+Tries to obtain the PPPoE credentials, MAC address, firmware version and IP
+information of the aDSL modems Huawei Echolife 520, 520b, 530 and possibly
+others by exploiting an information disclosure vulnerability via UDP.
+
+The script works by sending a crafted UDP packet to port 43690 and then
+parsing the response that contains the configuration values. This exploit
+has been reported to be blocked in some ISPs, in those cases the exploit
+seems to work fine in local networks.
 
 Vulnerability discovered by Pedro Joaquin. No CVE assigned.
 
@@ -23,19 +30,14 @@ References:
 -- @args huawei5xx-udp-info.timeout Timeout value. Default:3000ms
 ---
 
-
 author = "Paulino Calderon"
 license = "Same as Nmap--See http://nmap.org/book/man-legal.html"
 categories = {"intrusive", "vuln"}
 
-local stdnse = require "stdnse"
-local io = require "io"
-local shortport = require "shortport"
+HUAWEI_UDP_PORT = 43690
+PAYLOAD_LOCATION = "nselib/data/huawei-udp-info"
 
-HUAWEI_UDP_PORT=43690
-PAYLOAD_LOCATION="nselib/data/huawei-udp-info"
-
-portrule = shortport.portnumber(HUAWEI_UDP_PORT, "udp", {"open", "open|filtered","filtered"})
+portrule = shortport.portnumber(HUAWEI_UDP_PORT, "udp", {"open", "open|filtered", "filtered"})
 
 load_udp_payload = function()
   local payload_l = nmap.fetchfile(PAYLOAD_LOCATION)
