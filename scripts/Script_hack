@@ -1,0 +1,23 @@
+I'll walk you through a few examples of using NSE scripts.
+The first will show running the smb-enum-shares.nse script. 
+This script connects to a Windows or Samba file server and enumerates the shares. 
+The syntax is:
+
+nmap -Pn --script=smb-enum-shares 192.168.1.136
+
+
+
+ You can see there are four shares: 
+ ADMIN$, C$, IPC$, and "Documents and Settings". 
+ Another simple script is http-headers which does exactly what it says, 
+ retrieves HTTP headers. 
+ Here is the syntax:
+ 
+nmap -Pn -p80 --script=http-headers slashdot.org
+
+ Those are some pretty simple examples. 
+ Here is a little more complex one using smb-check-vulns.
+ 
+ 
+nmap -Pn -p445 --script=smb-check-vulns 192.168.1.136
+
