@@ -44,6 +44,8 @@ categories = {"vuln", "safe"}
 
 portrule = shortport.http
 
+local PATCHED = "The request has an invalid header name"
+
 action = function(host, port)
   local uri = stdnse.get_script_args(SCRIPT_NAME..".uri") or "/"
   local vuln_report = vulns.Report:new(SCRIPT_NAME, host, port)
@@ -68,8 +70,13 @@ successfully exploited this vulnerability could execute arbitrary code in the co
   options['header']['Range'] = "bytes=0-18446744073709551615"
 
   local response = http.get(host, port, uri, options)
-  if response.status and response.status == 416 then
+  if response.status and response.status == 416 and string.match(response.body, "Requested Range Not Satisfiable") ~= nil
+    and string.find(response.header["server"], "Microsoft") ~= nil then
     vuln.state = vulns.STATE.VULN
+  end
+  if response.body and string.match(response.body, PATCHED) ~= nil then
+    stdnse.debug2("System is patched!")
+    vuln.state = vulns.STATE.NOT_VULN
   end
   return vuln_report:make_output(vuln)
 end
