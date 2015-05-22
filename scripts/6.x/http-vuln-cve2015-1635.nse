@@ -44,6 +44,7 @@ categories = {"vuln", "safe"}
 
 portrule = shortport.http
 
+local VULNERABLE = "Requested Range Not Satisfiable"
 local PATCHED = "The request has an invalid header name"
 
 action = function(host, port)
@@ -70,13 +71,15 @@ successfully exploited this vulnerability could execute arbitrary code in the co
   options['header']['Range'] = "bytes=0-18446744073709551615"
 
   local response = http.get(host, port, uri, options)
-  if response.status and response.status == 416 and string.match(response.body, "Requested Range Not Satisfiable") ~= nil
+  if response.status and response.body then
+    if response.status == 416 and string.find(response.body, VULNERABLE) ~= nil
     and string.find(response.header["server"], "Microsoft") ~= nil then
-    vuln.state = vulns.STATE.VULN
-  end
-  if response.body and string.match(response.body, PATCHED) ~= nil then
-    stdnse.debug2("System is patched!")
-    vuln.state = vulns.STATE.NOT_VULN
+      vuln.state = vulns.STATE.VULN
+    end
+    if response.body and string.find(response.body, PATCHED) ~= nil then
+      stdnse.debug2("System is patched!")
+      vuln.state = vulns.STATE.NOT_VULN
+    end
   end
   return vuln_report:make_output(vuln)
 end
