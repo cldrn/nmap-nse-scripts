@@ -147,8 +147,8 @@ action = function(host)
     elseif(result == UNKNOWN) then
       vuln_table.state = vulns.STATE.LIKELY_VULN
    elseif(result == INFECTED) then
-      vuln_table.exploit_results = "This system has been patched by the Conficker worm."
-      vuln_table.state = vulns.STATE.NOT_VULN
+      vuln_table.exploit_results = "This system has been infected by the Conficker worm."
+      vuln_table.state = vulns.STATE.LIKELY_VULN
     else
       vuln_table.state = vulns.STATE.NOT_VULN
     end
