@@ -87,7 +87,7 @@ local function check_smbv2_dos(host)
     return false, "Couldn't create socket"
   end
 
-  status, result = socket:connect(host, 445)
+  local status, result = socket:connect(host, 445)
   if(status == false) then
     socket:close()
     return false, "Couldn't connect to host: " .. result
