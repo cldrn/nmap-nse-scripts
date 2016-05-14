@@ -2,6 +2,7 @@ Repository for NSE (Nmap Scripting Engine) development. You will find my scripts
 
 TODO
 ================
+-Finishing SMB2 NSE library
 -Currently working on password mangling functionality
 
 Paulino Calderon
