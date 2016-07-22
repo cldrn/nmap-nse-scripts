@@ -66,12 +66,14 @@ application is reading an arbitrary proxy value from the request headers.
       disclosure = {year = '2016', month = '07', day = '18'},
     },
   }
+  local good_avg = nil
+  local bad_avg = nil
 
   --Let's reduce false positives by running the test several times
   local inconsistent = false
   for i=1,test_count do --We always should get a larger avg in bad requests
-    local good_avg = get_avg(host, port, path, req_count, false)
-    local bad_avg = get_avg(host, port, path, req_count, true)
+    good_avg = get_avg(host, port, path, req_count, false)
+    bad_avg = get_avg(host, port, path, req_count, true)
     if good_avg > bad_avg then
       inconsistent = true
     end
