@@ -2,6 +2,7 @@ local stdnse = require "stdnse"
 local http = require "http"
 local os = require "os"
 local shortport = require "shortport"
+local vulns = require "vulns"
 
 description=[[
 Attempts to detect web applications vulnerable to "httpoxy" (CVE-2016-5385, CVE-2016-5386,
@@ -23,12 +24,6 @@ categories = {"vuln","exploit"}
 
 portrule = shortport.http
 
-local function req_poxy(host, port, path, opts)
-  opts["header"]["Proxy"] = stdnse.generate_random_string(12)
-  _ = http.get(host, port, path, opts)
-  return nil 
-end
-
 local function get_avg(host, port, path, iterations, bad_proxy)
   local total_time = 0
   local opts = {header={}}
@@ -38,7 +33,8 @@ local function get_avg(host, port, path, iterations, bad_proxy)
     local time_req = os.clock()
     --We don't care about the response, we are just measuring response times
     if bad_proxy then
-      req_poxy(host, port, path, opts)
+      opts["header"]["Proxy"] = stdnse.generate_random_string(12)
+      _ = http.get(host, port, path, opts)
     else
       _ = http.get(host, port, path, opts)
     end
@@ -55,6 +51,21 @@ action = function(host, port)
   local req_count = stdnse.get_script_args(SCRIPT_NAME..".iterations") or 10
   local test_count = stdnse.get_script_args(SCRIPT_NAME.."tests") or 3
   local output = stdnse.output_table()
+  local vuln_report = vulns.Report:new(SCRIPT_NAME, host, port)
+  local vuln = {
+    title = 'HTTPoxy',
+    state = vulns.STATE.NOT_VULN,
+    description = [[
+This web application might be affected by the vulnerability known as HTTPoxy. It seems the 
+application is reading an arbitrary proxy value from the request headers.
+    ]],
+    references = {
+      'https://httpoxy.org'
+    },
+    dates = {
+      disclosure = {year = '2016', month = '07', day = '18'},
+    },
+  }
 
   --Let's reduce false positives by running the test several times
   local inconsistent = false
@@ -67,8 +78,10 @@ action = function(host, port)
   end
 
   if not(inconsistent) then
-    output.httpoxy = "Possibly vulnerable to HTTPoxy!"
+    stdnse.debug1("Web application might be vulnerable to HTTPoxy")
+    vuln.state = vulns.STATE.VULN
+    vuln.extra_info = string.format("Avg response:%f Avg response with bad proxy:%f", good_avg, bad_avg)
   end
 
-  return output
+  return vuln_report:make_output(vuln)
 end
