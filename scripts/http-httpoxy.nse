@@ -24,6 +24,54 @@ categories = {"vuln","exploit"}
 
 portrule = shortport.http
 
+---
+-- @usage
+-- nmap -p80 --script http-httpoxy --script-args iterations=5 <target>
+-- nmap -sV --script http-httpoxy <target>
+--
+-- @args http-httpoxy.path Path. Default: /
+-- @args http-httpoxy.iterations Number of requests to measure response time. Default: 10 
+-- @args http-httpoxy.tests Number of comparison test to run. Default: 3
+--
+-- @output
+-- PORT   STATE SERVICE REASON
+-- 80/tcp open  http    syn-ack ttl 64
+-- | http-httpoxy: 
+-- |   VULNERABLE:
+-- |   HTTPoxy
+-- |     State: VULNERABLE
+-- |       This web application might be affected by the vulnerability known as HTTPoxy. It seems the 
+-- |       application is reading an arbitrary proxy value from the request headers.
+-- |           
+-- |     Disclosure date: 2016-07-18
+-- |     Extra information:
+-- |       Avg response:0.003057 Avg response with bad proxy:0.008315
+-- |     References:
+-- |_      https://httpoxy.org
+--
+-- @xmloutput
+-- <elem key="title">HTTPoxy</elem>
+-- <elem key="state">VULNERABLE</elem>
+-- <table key="description">
+-- <elem>This web application might be affected by the vulnerability known as HTTPoxy. It seems the 
+-- &#xa;application is reading an arbitrary proxy value from the request headers.&#xa;    </elem>
+-- </table>
+-- <table key="dates">
+-- <table key="disclosure">
+-- <elem key="month">07</elem>
+-- <elem key="day">18</elem>
+-- <elem key="year">2016</elem>
+-- </table>
+-- </table>
+-- <elem key="disclosure">2016-07-18</elem>
+-- <table key="extra_info">
+-- <elem>Avg response:0.003918 Avg response with bad proxy:0.008839</elem>
+-- </table>
+-- <table key="refs">
+-- <elem>https://httpoxy.org</elem>
+-- </table>
+---
+
 local function get_avg(host, port, path, iterations, bad_proxy)
   local total_time = 0
   local opts = {header={}}
