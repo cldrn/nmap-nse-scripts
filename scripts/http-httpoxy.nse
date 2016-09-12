@@ -3,6 +3,8 @@ local http = require "http"
 local os = require "os"
 local shortport = require "shortport"
 local vulns = require "vulns"
+local table = require "table"
+local string = require "string"
 
 description=[[
 Attempts to detect web applications vulnerable to "httpoxy" (CVE-2016-5385, CVE-2016-5386,
@@ -20,7 +22,7 @@ References:
 
 license = "Same as Nmap--See https://nmap.org/book/man-legal.html"
 author = "Paulino Calderon <calderon()websec.mx>"
-categories = {"vuln","exploit"}
+categories = {"vuln","exploit","intrusive"}
 
 portrule = shortport.http
 
@@ -30,8 +32,7 @@ portrule = shortport.http
 -- nmap -sV --script http-httpoxy <target>
 --
 -- @args http-httpoxy.path Path. Default: /
--- @args http-httpoxy.iterations Number of requests to measure response time. Default: 10 
--- @args http-httpoxy.tests Number of comparison test to run. Default: 3
+-- @args http-httpoxy.tests Number of comparison test to run. Default: 30
 --
 -- @output
 -- PORT   STATE SERVICE REASON
@@ -72,32 +73,41 @@ portrule = shortport.http
 -- </table>
 ---
 
-local function get_avg(host, port, path, iterations, bad_proxy)
-  local total_time = 0
+local function time_requests(host, port, path)
   local opts = {header={}}
-  opts["bypass_cache"] = true --Disable cache to avoid altering timing calculations
+  opts["bypass_cache"] = true
+  local time_req = nil
+  local time_resp = nil
+  local time_total = nil
 
-  for i=1,iterations do
-    local time_req = os.clock()
-    --We don't care about the response, we are just measuring response times
-    if bad_proxy then
-      opts["header"]["Proxy"] = stdnse.generate_random_string(12)
-      _ = http.get(host, port, path, opts)
-    else
-      _ = http.get(host, port, path, opts)
-    end
-    local time_resp = os.clock()
-    total_time = total_time + (time_resp - time_req)
+  --Good request first
+  time_req = os.clock()
+  _ = http.get(host, port, path, opts)
+  time_resp = os.clock()
+  time_total = time_resp - time_req
+  stdnse.debug1("Good request total time:%f", time_total)
+  --Bad request
+  opts["header"]["Proxy"] = string.format("%s.com", stdnse.generate_random_string(10))
+  time_req = os.clock()
+  _ = http.get(host, port, path, opts)
+  time_resp = os.clock() 
+  stdnse.debug1("Bad request total time:%f", time_resp - time_req)
+  return time_total, (time_resp - time_req)
+end
+
+local function calculate_avg(t) 
+  local entries = 0
+  local sum = 0
+  for _, v in pairs(t) do
+    sum = sum + v
+    entries = entries + 1
   end
-  
-  stdnse.debug1("Total time:%f Average:%f", total_time, total_time/iterations)
-  return total_time/iterations
+  return (sum/entries)
 end
 
 action = function(host, port)
   local path = stdnse.get_script_args(SCRIPT_NAME..".path") or "/"
-  local req_count = stdnse.get_script_args(SCRIPT_NAME..".iterations") or 10
-  local test_count = stdnse.get_script_args(SCRIPT_NAME.."tests") or 3
+  local test_count = stdnse.get_script_args(SCRIPT_NAME..".tests") or 30
   local output = stdnse.output_table()
   local vuln_report = vulns.Report:new(SCRIPT_NAME, host, port)
   local vuln = {
@@ -116,18 +126,21 @@ application is reading an arbitrary proxy value from the request headers.
   }
   local good_avg = nil
   local bad_avg = nil
+  local good_reqs = {}
+  local bad_reqs = {}
 
-  --Let's reduce false positives by running the test several times
-  local inconsistent = false
+  --We measure the average time of good/bad requests
   for i=1,test_count do --We always should get a larger avg in bad requests
-    good_avg = get_avg(host, port, path, req_count, false)
-    bad_avg = get_avg(host, port, path, req_count, true)
-    if good_avg > bad_avg then
-      inconsistent = true
-    end
+    good_avg, bad_avg = time_requests(host, port, path)
+    table.insert(good_reqs, good_avg)
+    table.insert(bad_reqs, bad_avg)
   end
 
-  if not(inconsistent) then
+  good_avg = calculate_avg(good_reqs)
+  stdnse.debug1("Average response time for requests without proxy header:%f", good_avg)
+  bad_avg = calculate_avg(bad_reqs)
+  stdnse.debug1("Average response time for requests with Proxy header:%f", bad_avg)
+  if bad_avg > ( good_avg * 2 )then
     stdnse.debug1("Web application might be vulnerable to HTTPoxy")
     vuln.state = vulns.STATE.VULN
     vuln.extra_info = string.format("Avg response:%f Avg response with bad proxy:%f", good_avg, bad_avg)
