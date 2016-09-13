@@ -14,7 +14,7 @@ The script attempts to detect this vulnerability by measuring the response time 
 assigning a non-existing proxy to the headers. In theory, vulnerable applications will try 
 to connect to the bad proxy increasing the response time. To reduce false positives we run 
 the test several times and we expect the response time from the request with the bad 
-proxy to always be greater than normal responses.  
+proxy to at least be twice as big to be marked as vulnerable.   
 
 References:
 * https://httpoxy.org
@@ -32,7 +32,8 @@ portrule = shortport.http
 -- nmap -sV --script http-httpoxy <target>
 --
 -- @args http-httpoxy.path Path. Default: /
--- @args http-httpoxy.tests Number of comparison test to run. Default: 30
+-- @args http-httpoxy.tests Number of tests used to measure average response time. Default: 30
+-- @args http-httpoxy.threshold Detection threshold. Default: 2
 --
 -- @output
 -- PORT   STATE SERVICE REASON
