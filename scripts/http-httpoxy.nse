@@ -109,7 +109,6 @@ action = function(host, port)
   local path = stdnse.get_script_args(SCRIPT_NAME..".path") or "/"
   local test_count = stdnse.get_script_args(SCRIPT_NAME..".tests") or 30
   local detection_threshold = stdnse.get_script_args(SCRIPT_NAME..".threshold") or 2
-  local output = stdnse.output_table()
   local vuln_report = vulns.Report:new(SCRIPT_NAME, host, port)
   local vuln = {
     title = 'HTTPoxy',
