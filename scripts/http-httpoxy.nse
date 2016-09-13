@@ -108,6 +108,7 @@ end
 action = function(host, port)
   local path = stdnse.get_script_args(SCRIPT_NAME..".path") or "/"
   local test_count = stdnse.get_script_args(SCRIPT_NAME..".tests") or 30
+  local detection_threshold = stdnse.get_script_args(SCRIPT_NAME..".threshold") or 2
   local output = stdnse.output_table()
   local vuln_report = vulns.Report:new(SCRIPT_NAME, host, port)
   local vuln = {
@@ -140,7 +141,7 @@ application is reading an arbitrary proxy value from the request headers.
   stdnse.debug1("Average response time for requests without proxy header:%f", good_avg)
   bad_avg = calculate_avg(bad_reqs)
   stdnse.debug1("Average response time for requests with Proxy header:%f", bad_avg)
-  if bad_avg > ( good_avg * 2 )then
+  if bad_avg > ( good_avg * detection_threshold )then
     stdnse.debug1("Web application might be vulnerable to HTTPoxy")
     vuln.state = vulns.STATE.VULN
     vuln.extra_info = string.format("Avg response:%f Avg response with bad proxy:%f", good_avg, bad_avg)
