@@ -14,7 +14,7 @@ The script attempts to detect this vulnerability by measuring the response time 
 assigning a non-existing proxy to the headers. In theory, vulnerable applications will try 
 to connect to the bad proxy increasing the response time. To reduce false positives we run 
 the test several times and we expect the response time from the request with the bad 
-proxy to at least be twice as big to be marked as vulnerable.   
+proxy to be twice as big to get marked as vulnerable.   
 
 References:
 * https://httpoxy.org
