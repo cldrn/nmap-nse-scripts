@@ -12,6 +12,9 @@ Attempts to enumerate valid email addresses using Google's Internal People API.
 This script uses 'unpwdb' for username guessing but you can provide your own list (--script-args userdb=/tmp/user.lst). 
 A valid Google account must be provided to communicate with the API.
 
+References:
+https://developers.google.com/people/api/rest/
+
 TODO:
 * Implement OAUTH to replace username and password.
 ]]
