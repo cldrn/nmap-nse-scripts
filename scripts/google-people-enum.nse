@@ -106,7 +106,13 @@ local function get_opts(cookie)
 end
 
 local function lookup(email, options)
-  local path = string.format("/v2/people/lookup?id=%s&type=EMAIL&matchType=EXACT&requestMask.includeField.paths=person.email&requestMask.includeField.paths=person.gender&requestMask.includeField.paths=person.in_app_reachability&requestMask.includeField.paths=person.metadata&requestMask.includeField.paths=person.name&requestMask.includeField.paths=person.phone&requestMask.includeField.paths=person.photo&requestMask.includeField.paths=person.read_only_profile_info&extensionSet.extensionNames=HANGOUTS_ADDITIONAL_DATA&extensionSet.extensionNames=HANGOUTS_OFF_NETWORK_GAIA_LOOKUP&extensionSet.extensionNames=HANGOUTS_PHONE_DATA&coreIdParams.useRealtimeNotificationExpandedAcls=true&key=AIzaSyAfFJCeph-euFSwtmqFZi0kaKk-cZ5wufM", email)
+  local path = string.format("/v2/people/lookup?id=%s&type=EMAIL&matchType=EXACT&requestMask.includeField.paths=person.email"..
+               "&requestMask.includeField.paths=person.gender&requestMask.includeField.paths=person.in_app_reachability"..
+               "&requestMask.includeField.paths=person.metadata&requestMask.includeField.paths=person.name"..
+               "&requestMask.includeField.paths=person.phone&requestMask.includeField.paths=person.photo"..
+               "&requestMask.includeField.paths=person.read_only_profile_info&extensionSet.extensionNames=HANGOUTS_ADDITIONAL_DATA"..
+               "&extensionSet.extensionNames=HANGOUTS_OFF_NETWORK_GAIA_LOOKUP&extensionSet.extensionNames=HANGOUTS_PHONE_DATA"..
+               "&coreIdParams.useRealtimeNotificationExpandedAcls=true&key=AIzaSyAfFJCeph-euFSwtmqFZi0kaKk-cZ5wufM", email)
   local response = http.generic_request('people-pa.clients6.google.com', '443', 'POST', path, options)
 
   if http.response_contains(response, email) then
