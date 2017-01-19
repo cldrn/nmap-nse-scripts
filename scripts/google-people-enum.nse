@@ -29,11 +29,27 @@ TODO:
 -- Host script results:
 -- | google-people-enum: 
 -- |   users: 
--- |_    user@example.com
+-- |     
+-- |       user1@example.com: 
+-- |         photo: https://lh3.googleusercontent.com/XXXXXXXXXXXXX/photo.jpg
+-- |         name: User 1
+-- |     
+-- |       user2@example.com: 
+-- |_        photo: https://lh3.googleusercontent.com/XXXXXXXXXXXXXXX/photo.jpg
 --
 -- @xmloutput
 -- <table key="users">
--- <elem>user@example.com</elem>
+-- <table>
+-- <table key="user1@example.com">
+-- <elem key="photo">https://XXXXXX/photo.jpg</elem>
+-- <elem key="name">User 1</elem>
+-- </table>
+-- </table>
+-- <table>
+-- <table key="user2@example.com">
+-- <elem key="photo">https://XXXXXX/photo.jpg</elem>
+-- </table>
+-- </table>
 -- </table>
 --
 -- @args google-people-enum.username Username to authenticate to Google's People API
@@ -117,23 +133,29 @@ local function lookup(email, options)
                "&extensionSet.extensionNames=HANGOUTS_OFF_NETWORK_GAIA_LOOKUP&extensionSet.extensionNames=HANGOUTS_PHONE_DATA"..
                "&coreIdParams.useRealtimeNotificationExpandedAcls=true&key=AIzaSyAfFJCeph-euFSwtmqFZi0kaKk-cZ5wufM", email)
   local response = http.generic_request('people-pa.clients6.google.com', '443', 'POST', path, options)
-
+  local userdata = {}
   if http.response_contains(response, email) then
     local status, person = json.parse(response.body)
     local lookupId = person['matches'][1]['lookupId']
     local personId = person['matches'][1]['personId'][1]
     local displayName
     local photo
+
+    userdata[lookupId] = {}
     if person['people'][personId]['name'] then
       displayName = person['people'][personId]['name'][1]['displayName']
+      stdnse.debug1("Display name:%s", displayName)
+      userdata[lookupId].name = displayName
     end
     if person['people'][personId]['photo'] then
       photo = person['people'][personId]['photo'][1]['url']
+      stdnse.debug1("Photo:%s", photo)
+      userdata[lookupId].photo = photo
     end
-    stdnse.debug2("Match")
-    return true, lookupId
+
+    return true, userdata
   else
-    stdnse.debug2("No match")
+    stdnse.debug2("User '%s' wasn't found.", email)
     return false, 'No match'
   end
 end
@@ -169,14 +191,14 @@ action = function(host, port)
   if http.response_contains(response, "CheckCookie") then 
     cookie = get_cookie(response)
     options = get_opts(cookie)
-    local tmp = {} 
+    local tmp = {}
     local try = nmap.new_try()
     local usernames = try(unpwdb.usernames())
     for username in usernames do
       stdnse.debug1("Checking if user '%s@%s' exists", username, target)
       local status, result = lookup(string.format("%s@%s", username, target), options)
       if status then
-        stdnse.debug1("User '%s' exists!", username)
+        stdnse.debug1("User '%s' exists! Display name:%s Photo:%s", username, result.name, result.photo)
         table.insert(tmp, result)
       end
     end
