@@ -7,7 +7,8 @@ local json = require "json"
 local unpwdb = require "unpwdb"
 
 description = [[
-Attempts to enumerate valid email addresses using Google's Internal People API.
+Attempts to enumerate valid email addresses using Google's Internal People API. If a valid email address is found, it 
+also grabs the display name and photo from the profile.
 
 This script uses 'unpwdb' for username guessing but you can provide your own list (--script-args userdb=/tmp/user.lst). 
 A valid Google account must be provided to communicate with the API.
