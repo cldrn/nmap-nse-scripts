@@ -1,4 +1,4 @@
-local openssl = require 'openssl'
+local openssl = require "openssl"
 local http = require "http"
 local shortport = require "shortport"
 local stdnse = require "stdnse"
