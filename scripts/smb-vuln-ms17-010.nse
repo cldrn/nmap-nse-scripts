@@ -9,7 +9,7 @@ Attempts to detect if a Microsoft SMBv1 server is vulnerable to a remote code
 
 The script connects to the $IPC tree, executes a transaction on FID 0 and
  checks if the error "STATUS_INSUFF_SERVER_RESOURCES" is returned to
- determine if the target is not patched against CVE2017-010.
+ determine if the target is not patched against ms17-010.
 
 Tested on a vulnerable Windows 7. We might have some issues with v2 protocols with
  signing enabled.
