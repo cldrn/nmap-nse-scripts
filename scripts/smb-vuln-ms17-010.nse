@@ -76,16 +76,16 @@ hostrule = function(host)
   return smb.get_port(host) ~= nil
 end
 
-local function check_ms17010(host, port)
-  local status, smbstate = smb.start_ex(host, true, true, "IPC$", nil, nil, nil)
+local function check_ms17010(host, port, sharename)
+  local status, smbstate = smb.start_ex(host, true, true, sharename, nil, nil, nil)
   if not status then
-    stdnse.debug1("Could not connect to IPC$")
-    return false, "Could not connect to IPC$"
+    stdnse.debug1("Could not connect to '%s'", sharename)
+    return false, string.format("Could not connect to '%s'", sharename)
   else
     local overrides = {}
     local smb_header, smb_params, smb_cmd
 
-    stdnse.debug1("Connected to IPC$ share")
+    stdnse.debug1("Connected to share '%s'", sharename)
 
     overrides['parameters_length'] = 0x10
 
@@ -156,11 +156,11 @@ A critical remote code execution vulnerability exists in Microsoft SMBv1
       disclosure = {year = '2017', month = '03', day = '14'},
     }
   }
-
+  local sharename = stdnse.get_script_args(SCRIPT_NAME .. ".sharename") or "IPC$"
   local report = vulns.Report:new(SCRIPT_NAME, host, port)
   vuln.state = vulns.STATE.NOT_VULN
 
-  vuln_status, err = check_ms17010(host, port)
+  vuln_status, err = check_ms17010(host, port, sharename)
   if vuln_status then
     stdnse.debug1("This host is missing the patch for ms17-010!")
     vuln.state = vulns.STATE.VULN
