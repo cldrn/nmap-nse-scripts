@@ -22,7 +22,7 @@ References:
 ]]
 
 ---
--- @usage nmap -p445 --script smb-vuln-ms2017-010 <target>
+-- @usage nmap -p445 --script smb-vuln-ms17-010.nse <target>
 -- @usage nmap -p445 --script vuln <target>
 --
 -- @output
