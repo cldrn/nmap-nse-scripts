@@ -79,13 +79,13 @@ end
 local function check_ms17010(host, port, sharename)
   local status, smbstate = smb.start_ex(host, true, true, sharename, nil, nil, nil)
   if not status then
-    stdnse.debug1("Could not connect to '%s'", sharename)
+    stdnse.print_debug("Could not connect to '%s'", sharename)
     return false, string.format("Could not connect to '%s'", sharename)
   else
     local overrides = {}
     local smb_header, smb_params, smb_cmd
 
-    stdnse.debug1("Connected to share '%s'", sharename)
+    stdnse.print_debug("Connected to share '%s'", sharename)
 
     overrides['parameters_length'] = 0x10
 
@@ -117,22 +117,22 @@ local function check_ms17010(host, port, sharename)
     stdnse.debug2("SMB: Sending SMB_COM_TRANSACTION")
     result, err = smb.smb_send(smbstate, smb_header, smb_params, '', overrides)
     if(result == false) then
-      stdnse.debug1("There was an error in the SMB_COM_TRANSACTION request")
+      stdnse.print_debug("There was an error in the SMB_COM_TRANSACTION request")
       return false, err
     end
 
     result, smb_header, _, _ = smb.smb_read(smbstate)
     _ , smb_cmd, err = string.unpack("<c4 B I4", smb_header)
     if smb_cmd == 37 then -- SMB command for Trans is 0x25
-      stdnse.debug1("Valid SMB_COM_TRANSACTION response received")
+      stdnse.print_debug("Valid SMB_COM_TRANSACTION response received")
 
       --STATUS_INSUFF_SERVER_RESOURCES indicate that the machine is not patched
       if err == 0xc0000205 then 
-        stdnse.debug1("STATUS_INSUFF_SERVER_RESOURCES response received")
+        stdnse.print_debug("STATUS_INSUFF_SERVER_RESOURCES response received")
         return true
       end
     else
-      stdnse.debug1("Received invalid command id.")
+      stdnse.print_debug("Received invalid command id.")
       return false, err
     end
   end
@@ -162,7 +162,7 @@ A critical remote code execution vulnerability exists in Microsoft SMBv1
 
   vuln_status, err = check_ms17010(host, port, sharename)
   if vuln_status then
-    stdnse.debug1("This host is missing the patch for ms17-010!")
+    stdnse.print_debug("This host is missing the patch for ms17-010!")
     vuln.state = vulns.STATE.VULN
   else
     if nmap.verbosity() >=1 then
