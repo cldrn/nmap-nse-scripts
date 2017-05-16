@@ -22,7 +22,7 @@ References:
 ]]
 
 ---
--- @usage nmap -p445 --script smb-vuln-ms17-010 [--script-args=smbuser=<user>,smbdomain=<dom>,smbpassword=<pass>] <target>
+-- @usage nmap -p445 --script smb-vuln-ms17-010 [--script-args=smbusername=<user>,smbdomain=<dom>,smbpassword=<pass>] <target>
 -- @usage nmap -p445 --script vuln <target>
 --
 -- @output
