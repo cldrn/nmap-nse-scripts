@@ -22,7 +22,7 @@ References:
 ]]
 
 ---
--- @usage nmap -p445 --script smb-vuln-ms17-010 [--script-args=username=<user>,domain=<dom>,password=<pass>] <target>
+-- @usage nmap -p445 --script smb-vuln-ms17-010 [--script-args=smbuser=<user>,smbdomain=<dom>,smbpassword=<pass>] <target>
 -- @usage nmap -p445 --script vuln <target>
 --
 -- @output
@@ -79,22 +79,17 @@ end
 local function check_ms17010(host, port, sharename)
   local username, domain, password, status
   local overrides = {}
-  local anonguest, smbstate = smb.start_ex(host,true,true,nil,nil,nil,overrides)
-  if not anonguest then
-    username, domain, password = stdnse.get_script_args('username', 'domain', 'password')
-    overrides = smb.get_overrides(username,domain,password,nil,nil,nil)
-    status, smbstate = smb.start_ex(host,true,true,nil,nil,nil,overrides)
-    if not status then
-      stdnse.debug1("Unable to get the server name")
-      return false, smbstate
-    end
+  local status, smbstate = smb.start_ex(host,true,true,nil,nil,nil,overrides)
+  if not status then
+    stdnse.debug1("Unable to get the server name")
+    return false, string.format("Login Failure: %s", smbstate)
   end
   local servername = smbstate['server']
   smb.stop(smbstate)
   status, smbstate = smb.start_ex(host, true, true, "\\\\".. servername .. "\\" .. sharename, nil, nil, overrides )
   if not status then
     stdnse.debug1("Could not connect to '%s'", sharename)
-    return false, string.format("Could not connect to '%s'", sharename)
+    return false, string.format("Could not connect to '%s': %s", sharename, smbstate)
   else
     local smb_header, smb_params, smb_cmd
 
