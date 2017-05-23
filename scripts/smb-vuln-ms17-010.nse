@@ -134,9 +134,10 @@ local function check_ms17010(host, port, sharename)
         stdnse.debug1("STATUS_ACCESS_DENIED response received. This system is likely patched.")
 	return false, "This system is patched."
       end
+      stdnse.debug1("Error code received:%s", stdnse.tohex(err))
     else
       stdnse.debug1("Received invalid command id.")
-      return false, err
+      return false, string.format("Unexpected SMB response:%s", stdnse.tohex(err))
     end
   end
 end
