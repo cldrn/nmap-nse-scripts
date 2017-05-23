@@ -1316,8 +1316,6 @@ local function start_session_extended(smb, log_errors, overrides)
   local sp_nego = true
   if ( smb['security_blob'] and #smb['security_blob'] > 11 ) then
     local pos, oid = bin.unpack(">A6", smb['security_blob'], 5)
-    print(stdnse.tohex(oid))
-    print(pos)
     sp_nego = ( oid == "\x2b\x06\x01\x05\x05\x02" or oid == "\x06\x06\x2b\x06\x01\x05") -- check for SPNEGO OID 1.3.6.1.5.5.2
   end
   local ntlm_challenge_accepted = false
