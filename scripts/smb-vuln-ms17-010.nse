@@ -77,7 +77,7 @@ hostrule = function(host)
 end
 
 local function check_ms17010(host, port, sharename)
-  local status, smbstate = smb.start_ex(host, true, true, "\\\\".. host.ip .. "\\" .. sharename, nil, nil, nil)
+  local status, smbstate = smb.start_ex(host, true, true, sharename, nil, nil, nil)
   if not status then
     stdnse.debug1("Could not connect to '%s'", sharename)
     return false, string.format("Could not connect to '%s'", sharename)
