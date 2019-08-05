@@ -10,7 +10,8 @@ Normally, a 'DICOM ping' is formed as follows:
 * Client -> A-RELEASE request -> Server
 * Server -> A-RELEASE response -> Client
 
-For this script we only send the A-ASSOCIATE request and look for the success code in the response as it seems to be a reliable way of detecting the devices.
+For this script we only send the A-ASSOCIATE request and look for the success code
+ in the response as it seems to be a reliable way of detecting DICOM servers.
 ]]
 
 ---
@@ -35,18 +36,23 @@ local nmap = require "nmap"
 portrule = shortport.port_or_service({104, 2345, 2761, 2762, 4242, 11112}, "dicom", "tcp", "open")
 
 action = function(host, port)
+  local output = stdnse.output_table()
   local dcm_conn_status, err = dicom.associate(host, port)
   if dcm_conn_status == false then
     stdnse.debug1("Association failed:%s", err)
-    if nmap.verbosity() > 1 then
-      return string.format("Association failed:%s", err)
-    else
-      return nil
+    if err == "ASSOCIATE REJECT received" then
+      port.version.name = "dicom"
+      nmap.set_port_version(host, port)
+  
+      output.dicom = "DICOM Service Provider discovered!"
+      output.config = "Called AET check enabled"
     end
+    return output
   end
   port.version.name = "dicom"
-  port.version.product = "DICOM SCP"
   nmap.set_port_version(host, port)
   
-  return "DICOM SCP discovered" 
+  output.dicom = "DICOM Service Provider discovered!"
+  output.config = "Any AET accepted"
+  return output
 end
