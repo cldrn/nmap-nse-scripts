@@ -1,5 +1,8 @@
 --
--- DICOM library.
+-- DICOM library
+--
+-- This library implements (partially) the DICOM protocol. This protocol is used to
+-- capture, store and distribute medical images.
 --
 -- From Wikipedia:
 -- The core application of the DICOM standard is to capture, store and distribute
@@ -12,16 +15,23 @@
 -- ECGs, encoding CAD results, encoding structured measurement data, and storing
 -- acquisition protocols.
 --
+-- OPTIONS:
+-- *<code>called_aet</code> - If set it changes the called Application Entity Title
+--                            used in the requests. Default: ANY-SCP
+-- *<code>calling_aet</code> - If set it changes the calling Application Entity Title
+--                            used in the requests. Default: ECHOSCU
+--
+-- @args dicom.called_aet Called Application Entity Title.
+-- @args dicom.calling_aet Calling Application Entity Title.
+-- 
 -- @author Paulino Calderon <paulino@calderonpale.com>
 -- @copyright Same as Nmap--See https://nmap.org/book/man-legal.html
---
 ---
 
 local nmap = require "nmap"
 local stdnse = require "stdnse"
 local string = require "string"
 local table = require "table"
-local nsedebug = require "nsedebug"
 
 _ENV = stdnse.module("dicom", stdnse.seeall)
 
@@ -84,7 +94,7 @@ function send(dcm, data)
       return false, err
     end
   else 
-    return false, "No socket found."
+    return false, "No socket found. Check your DICOM object"
   end
   return true
 end
@@ -101,7 +111,6 @@ function receive(dcm)
     return false, data
   end
   stdnse.debug1("DICOM: receive() read %d bytes", #data)
-  nsedebug.print_hex(data)
   return true, data
 end
 
@@ -126,7 +135,6 @@ function pdu_header_encode(pdu_type, length)
                             pdu_type, -- PDU Type ( 1 byte - unsigned integer in Big Endian )
                             0,        -- Reserved section ( 1 byte that should be set to 0x0 )
                             length)   -- PDU Length ( 4 bytes - unsigned integer in Little Endian)
-  nsedebug.print_hex(header)
   if #header < MIN_HEADER_LEN then
     return false, "Header must be at least 6 bytes. Something went wrong."
   end
@@ -222,7 +230,6 @@ function associate(host, port, calling_aet, called_aet)
   end
 
   assoc_request = header .. assoc_request
-  nsedebug.print_hex(assoc_request)
  
   stdnse.debug2("PDU len minus header:%d", #assoc_request-#header)
   if #assoc_request < MIN_SIZE_ASSOC_REQ then
@@ -257,7 +264,6 @@ function send_pdata(dicom, data)
   end
   local err
   status, err = send(dicom, header .. data)
-  nsedebug.print_hex(header..data)
   if status == false then
     return false, err
   end
