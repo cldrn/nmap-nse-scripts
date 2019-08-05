@@ -78,11 +78,14 @@ end
 function send(dcm, data) 
   local status, err
   stdnse.debug2("DICOM: Sending DICOM packet (%d)", #data)
-  status, err = dcm['socket']:send(data)
-  if status == false then
-    return false, err
+  if dcm['socket'] then
+    status, err = dcm['socket']:send(data)
+    if status == false then
+      return false, err
+    end
+  else 
+    return false, "No socket found."
   end
-
   return true
 end
 
@@ -139,7 +142,7 @@ end
 --                       If status is false, dcm is the error message.
 ---
 
-function associate(host, port)
+function associate(host, port, calling_aet, called_aet)
   local application_context = ""
   local presentation_context = ""
   local userinfo_context = ""
@@ -174,7 +177,7 @@ function associate(host, port)
                                     transfer_syntax_name)
                                     
   local implementation_id = "1.2.276.0.7230010.3.0.3.6.2"
-  local implementation_version = "NMAP_DICOM"
+  local implementation_version = "OFFIS_DCMTK_362"
   userinfo_context = string.pack(">B B I2 B B I2 I4 B B I2 c" .. #implementation_id .. " B B I2 c".. #implementation_version,
                                 0x50,    -- Type 0x50 (1 byte)
                                 0x0,     -- Reserved ( 1 byte )
@@ -192,8 +195,11 @@ function associate(host, port)
                                 0x0f,
                                 implementation_version)
   
-  local called_ae_title = "ANY-SCP"
-  local calling_ae_title = "NMAP-DICOM"
+  local called_ae_title = called_aet or stdnse.get_script_args("dicom.called_aet") or "ANY-SCP"
+  local calling_ae_title = calling_aet or stdnse.get_script_args("dicom.calling_aet") or "ECHOSCU"
+  if #called_ae_title > 16 or #calling_ae_title > 16 then
+    return false, "Calling/Called Application Entity Title must be less than 16 bytes"
+  end
   called_ae_title = called_ae_title .. string.rep(" ", 16 - #called_ae_title)
   calling_ae_title = calling_ae_title .. string.rep(" ", 16 - #calling_ae_title)
 

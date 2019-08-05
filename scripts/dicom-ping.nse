@@ -35,10 +35,7 @@ local nmap = require "nmap"
 portrule = shortport.port_or_service({104, 2345, 2761, 2762, 4242, 11112}, "dicom", "tcp", "open")
 
 action = function(host, port)
-  local i = 0
-  while(i<10) do
   local dcm_conn_status, err = dicom.associate(host, port)
-  dicom.send_pdata(err, string.pack(">BBBB", 0x1, 0x2, 0x3, 0x4))
   if dcm_conn_status == false then
     stdnse.debug1("Association failed:%s", err)
     if nmap.verbosity() > 1 then
@@ -46,8 +43,6 @@ action = function(host, port)
     else
       return nil
     end
-  end
-  i = i + 1
   end
   port.version.name = "dicom"
   port.version.product = "DICOM SCP"
