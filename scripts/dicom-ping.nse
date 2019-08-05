@@ -1,5 +1,9 @@
 description = [[
 Attempts to discover DICOM servers (DICOM Service Provider) through a partial C-ECHO request.
+ It also detects if the server allows any called Application Entity Title or not.
+
+The script responds with the message "Called AET check enabled" when the association request
+ is rejected due configuration. This value can be bruteforced.
 
 C-ECHO requests are commonly known as DICOM ping as they are used to test connectivity.
 Normally, a 'DICOM ping' is formed as follows:
@@ -21,12 +25,20 @@ For this script we only send the A-ASSOCIATE request and look for the success co
 -- @output
 -- PORT     STATE SERVICE REASON
 -- 4242/tcp open  dicom   syn-ack
--- |_dicom-ping: DICOM DSP discovered
+-- | dicom-ping: 
+-- |   dicom: DICOM Service Provider discovered!
+-- |_  config: Called AET check enabled
+--
+-- @xmloutput
+-- <script id="dicom-ping" output="&#xa;  dicom: DICOM Service Provider discovered!&#xa;
+--   config: Called AET check enabled"><elem key="dicom">DICOM Service Provider discovered!</elem>
+-- <elem key="config">Called AET check enabled</elem>
+-- </script>
 ---
 
 author = "Paulino Calderon <calderon()calderonpale.com>"
 license = "Same as Nmap--See http://nmap.org/book/man-legal.html"
-categories = {"discovery", "default"}
+categories = {"discovery", "default", "safe", "auth"}
 
 local shortport = require "shortport"
 local dicom = require "dicom"
@@ -53,6 +65,6 @@ action = function(host, port)
   nmap.set_port_version(host, port)
   
   output.dicom = "DICOM Service Provider discovered!"
-  output.config = "Any AET accepted"
+  output.config = "Any AET is accepted (Insecure)"
   return output
 end

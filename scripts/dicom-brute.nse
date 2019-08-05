@@ -1,7 +1,8 @@
 description = [[
-Attempts to brute force the Application Entity Title of DICOM servers (DICOM Service Provider).
+Attempts to brute force the Application Entity Title of a DICOM server (DICOM Service Provider).
 
-Application Entity Titles are used to restrict responses only to clients with a valid Application Entity Title.
+Application Entity Titles (AET) are used to restrict responses only to clients knowing the title. Hence,
+ the called AET is used as a form of password.
 ]]
 
 ---
@@ -20,7 +21,7 @@ Application Entity Titles are used to restrict responses only to clients with a 
 
 author = "Paulino Calderon <calderon()calderonpale.com>"
 license = "Same as Nmap--See http://nmap.org/book/man-legal.html"
-categories = {"discovery", "default"}
+categories = {"auth", "brute"}
 
 local shortport = require "shortport"
 local dicom = require "dicom"
@@ -50,7 +51,7 @@ Driver = {
   end,
 
   login = function(self, username, password)
-    stdnse.debug2("Trying with called AE title:%s", username)
+    stdnse.debug2("Trying with called AE title:%s", password)
     local dcm_conn, err = dicom.associate(self.host, self.port, nil, password)
     if dcm_conn then
       return true, creds.Account:new("Called Application Entity Title", password, creds.State.VALID)
@@ -72,7 +73,7 @@ action = function(host, port)
   local engine = brute.Engine:new(Driver, host, port)
   engine:setMaxThreads(5)
   engine.options.script_name = SCRIPT_NAME
-  engine.options:setOption("passonly", true )
+  engine.options:setOption("passonly", true)
   local status, result = engine:start()
 
   return result
