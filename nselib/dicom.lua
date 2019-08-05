@@ -21,8 +21,8 @@
 -- *<code>calling_aet</code> - If set it changes the calling Application Entity Title
 --                            used in the requests. Default: ECHOSCU
 --
--- @args dicom.called_aet Called Application Entity Title.
--- @args dicom.calling_aet Calling Application Entity Title.
+-- @args dicom.called_aet Called Application Entity Title. Default: ANY-SCP
+-- @args dicom.calling_aet Calling Application Entity Title. Default: ECHOSCU
 -- 
 -- @author Paulino Calderon <paulino@calderonpale.com>
 -- @copyright Same as Nmap--See https://nmap.org/book/man-legal.html
