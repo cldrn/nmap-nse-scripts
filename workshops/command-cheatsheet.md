@@ -19,4 +19,11 @@
 
 `` $ nmap -p22 --script ssh-brute --script-args userdb=<file>,passdb=<file> <target>``
 
+## Brute force Wordpress users running on prohibited ports
 
+`` nmap -p9100 --script +http-wordpress-users 127.0.0.1 --script-args http-wordpress-users.basepath=/wordpress/ ``
+
+## Brute force Wordpress passwords running on prohibited ports
+
+`` nmap -p9100 --script +http-wordpress-brute 127.0.0.1 --script-args http-wordpress-brute.uri=/wordpress/wp-login.php,userdb=users.txt -d
+ ``
