@@ -3,6 +3,12 @@
 
 ``# make install``
 
+## Version intensity scans
+
+``nmap -p- 127.0.0.1 -sV --version-intensity 9``
+
+``nmap -p- 127.0.0.1 -sV --version-all``
+
 ## Brute force SSH with Ncrack and some fine tunning
   
 ``$ ncrack ssh://192.168.1.1:45120,CL=1,at=6,cd=15s,to=6h -v -f --user root -P ./pass.txt --save ~/ssh_session``
